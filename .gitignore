@@ -1,0 +1,13 @@
+target/
+build/
+*.class
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/backups/
+logs/
+exports/*.xlsx
+exports/*.pdf
+.idea/
+*.iml
+.vscode/

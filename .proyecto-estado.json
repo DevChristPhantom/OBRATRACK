@@ -1,0 +1,41 @@
+{
+  "version": "1.8.0",
+  "ultima_actualizacion": "2026-07-02T14:30:00",
+  "nota_mount": "IMPORTANTE: en este mount, el Edit tool y las lecturas de bash a veces inyectan bytes NUL o devuelven versiones truncadas. NO reescribir archivos leyendolos por bash sin verificar. Verificar SIEMPRE con la herramienta Read (ruta Windows real). Tras editar, correr un barrido que quite bytes NUL. El usuario ya puede compilar con 'mvn clean test' en IntelliJ, que es la validacion definitiva.",
+  "stack": "Java 17 + Swing + FlatLaf (+ flatlaf-extras/svgSalamander) + Java2D (graficos) + PBKDF2 (JDK, hashing de claves) + SQLite (JDBC) + Apache POI + PDFBox + Maven",
+  "nota_stack": "El usuario pidio explicitamente Java + IntelliJ + .exe. Swing (no JavaFX). Futuras sesiones no deben revertir a Python.",
+  "fase_actual": "Sprint 12: control de usuarios / login (1.8.0). App funcional; build verde en IntelliJ (mvn clean test = 25 tests OK antes de este sprint eran 18).",
+  "nota_entorno": "El sandbox no compila Java (sin JDK/Maven/red). La logica se valida en Python/SQLite. El usuario compila y corre los tests en IntelliJ.",
+  "credenciales_por_defecto": "admin / admin123 (se crea en el primer arranque; recomendable cambiarla).",
+  "completado": [
+    "Sprint 12: control de usuarios. Tabla usuario (username unico, hash, rol, activo). PasswordUtil (PBKDF2WithHmacSHA256, salt, 120k iteraciones, verificacion en tiempo constante). Usuario (modelo, roles ADMIN/JEFE_OBRA/ALMACENERO). UsuarioService (crear/autenticar/listar/cambiarPassword/sembrarAdminSiVacio). SesionActual (holder del usuario logueado). LoginView (pantalla partida con logoTitan.png + 4 modulos). Main arranca en login. Auditoria usa SesionActual.nombre(). MainWindow: user card real + Cerrar sesion. Tests PasswordUtilTest (4) + UsuarioServiceTest (3).",
+    "Verificacion integral 1.7.1: cross-check UI/servicios, Theme/Icons/recursos, balance en .java, seguridad, limpieza de bytes NUL inyectados por el editor. mvn clean test = BUILD SUCCESS, 18 tests OK (confirmado por el usuario).",
+    "Sprint 11: Almacen editar/eliminar + auditoria (columnas creado_en/actualizado_en + tabla movimiento_auditoria append-only; MovimientoService actualizar/obtenerPorId/listarAuditoria; AlmacenView modo edicion, eliminar con confirmacion, dialogo Historial). Migracion ALTER TABLE segura.",
+    "Sprint 10: semaforo de salud (IndicadorSalud: ritmo gasto vs tiempo + sobregiro; umbrales aprobados por el usuario). Banner en Dashboard. Fechas inicio/fin en Nueva obra. LineChart Java2D. Tests IndicadorSaludTest.",
+    "Sprint 9: UI adaptable (maximizada, KPIs auto-ajustados), boton Salir, DonutChart + BarsChart Java2D con datos reales.",
+    "Sprint 8: iconografia SVG (17 iconos + util Icons con FlatSVGIcon; svgSalamander). Sidebar rediseñado, KpiCard con IconBadge.",
+    "Sprint 7: ExcelImporter validado contra el consolidado real (Sheet1 = 3,865,615.16 = Costo Directo; 976 partidas). Fixes multi-hoja, workbook abierto, seleccion de hoja. Indice idx_mov_obra_fecha.",
+    "Sprint 6: comparativo temporal (Granularidad, ResumenPeriodo, resumenPorPeriodo, ComparativoView, exportacion Excel/PDF).",
+    "Base: Maven; modelos; Database SQLite; servicios CRUD; ExcelImporter; UI (Dashboard/Obras/Partidas/Almacen/Reportes); ReporteService/ReportePdf/EstilosExcel."
+  ],
+  "en_progreso": [],
+  "pendiente": [
+    "Cambiar la contrasena por defecto de admin tras el primer ingreso.",
+    "Pantalla de gestion de usuarios (alta/baja/reset de clave, roles) dentro de la app.",
+    "Aplicar permisos por rol (por ahora los roles son informativos).",
+    "Exportar la tabla de partidas a Excel desde la UI.",
+    "Generar el .exe real (Launch4j o jpackage en Windows con JDK)."
+  ],
+  "notas_tecnicas": "La logica critica fue validada en Python/SQLite. El usuario ya compila y corre 'mvn clean test' en IntelliJ (BUILD SUCCESS con 18 tests; ahora deberia dar 25). Contrasenas hasheadas con PBKDF2. Login por usuario/contrasena; los botones Windows/Google del mockup no se implementaron (requieren OAuth externo).",
+  "archivos_clave": [
+    "pom.xml",
+    "src/main/java/com/obratrack/Main.java",
+    "src/main/java/com/obratrack/core/Database.java",
+    "src/main/java/com/obratrack/util/PasswordUtil.java",
+    "src/main/java/com/obratrack/service/UsuarioService.java",
+    "src/main/java/com/obratrack/service/SesionActual.java",
+    "src/main/java/com/obratrack/ui/LoginView.java",
+    "src/main/java/com/obratrack/service/MovimientoService.java",
+    "src/main/java/com/obratrack/ui/MainWindow.java"
+  ]
+}
