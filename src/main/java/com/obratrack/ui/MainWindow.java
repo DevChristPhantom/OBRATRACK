@@ -375,7 +375,7 @@ public class MainWindow extends JFrame {
             boolean activo = entry.getKey().equals(vistaActual);
             JButton btn = entry.getValue();
             btn.setBackground(activo ? Theme.NAV_ACTIVE : Theme.BG_SECONDARY);
-            btn.setForeground(activo ? Theme.TEXT_PRIMARY : Theme.TEXT_SECONDARY);
+            btn.setForeground(activo ? Theme.PRIMARY : Theme.TEXT_SECONDARY);
             btn.setFont(activo ? Theme.FONT_BOLD : Theme.FONT_BASE);
             Color colorIcono = activo ? Theme.PRIMARY : Theme.TEXT_SECONDARY;
             btn.setIcon(Icons.get(iconosNav.get(entry.getKey()), 20, colorIcono));

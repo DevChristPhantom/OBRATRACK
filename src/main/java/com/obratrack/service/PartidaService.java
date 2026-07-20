@@ -7,6 +7,7 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
+/** CRUD de partidas de obra. Todo acceso se serializa bajo {@link Database#LOCK}. */
 public class PartidaService {
 
     public void guardarTodas(long obraId, List<Partida> partidas) throws SQLException {
@@ -15,40 +16,44 @@ public class PartidaService {
                                   costo_unitario, costo_total_presupuestado, es_padre, nivel)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """;
-        Connection conn = Database.get();
-        boolean autoCommitOriginal = conn.getAutoCommit();
-        conn.setAutoCommit(false);
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            for (Partida p : partidas) {
-                ps.setLong(1, obraId);
-                ps.setString(2, p.getCodigo());
-                ps.setString(3, p.getDescripcion());
-                ps.setString(4, p.getUnidad());
-                ps.setDouble(5, p.getCantidadPresupuestada());
-                ps.setDouble(6, p.getCostoUnitario());
-                ps.setDouble(7, p.getCostoTotalPresupuestado());
-                ps.setInt(8, p.isEsPadre() ? 1 : 0);
-                ps.setInt(9, p.getNivel());
-                ps.addBatch();
+        synchronized (Database.LOCK) {
+            Connection conn = Database.get();
+            boolean autoCommitOriginal = conn.getAutoCommit();
+            conn.setAutoCommit(false);
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                for (Partida p : partidas) {
+                    ps.setLong(1, obraId);
+                    ps.setString(2, p.getCodigo());
+                    ps.setString(3, p.getDescripcion());
+                    ps.setString(4, p.getUnidad());
+                    ps.setDouble(5, p.getCantidadPresupuestada());
+                    ps.setDouble(6, p.getCostoUnitario());
+                    ps.setDouble(7, p.getCostoTotalPresupuestado());
+                    ps.setInt(8, p.isEsPadre() ? 1 : 0);
+                    ps.setInt(9, p.getNivel());
+                    ps.addBatch();
+                }
+                ps.executeBatch();
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(autoCommitOriginal);
             }
-            ps.executeBatch();
-            conn.commit();
-        } catch (SQLException e) {
-            conn.rollback();
-            throw e;
-        } finally {
-            conn.setAutoCommit(autoCommitOriginal);
         }
     }
 
     public List<Partida> listarPorObra(long obraId) throws SQLException {
         List<Partida> resultado = new ArrayList<>();
         String sql = "SELECT * FROM partida WHERE obra_id = ? ORDER BY codigo";
-        try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
-            ps.setLong(1, obraId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    resultado.add(mapear(rs));
+        synchronized (Database.LOCK) {
+            try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
+                ps.setLong(1, obraId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        resultado.add(mapear(rs));
+                    }
                 }
             }
         }
@@ -59,11 +64,13 @@ public class PartidaService {
     public List<Partida> listarEjecutablesPorObra(long obraId) throws SQLException {
         List<Partida> resultado = new ArrayList<>();
         String sql = "SELECT * FROM partida WHERE obra_id = ? AND es_padre = 0 ORDER BY codigo";
-        try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
-            ps.setLong(1, obraId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    resultado.add(mapear(rs));
+        synchronized (Database.LOCK) {
+            try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
+                ps.setLong(1, obraId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        resultado.add(mapear(rs));
+                    }
                 }
             }
         }
@@ -72,9 +79,11 @@ public class PartidaService {
 
     public void eliminarPorObra(long obraId) throws SQLException {
         String sql = "DELETE FROM partida WHERE obra_id = ?";
-        try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
-            ps.setLong(1, obraId);
-            ps.executeUpdate();
+        synchronized (Database.LOCK) {
+            try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
+                ps.setLong(1, obraId);
+                ps.executeUpdate();
+            }
         }
     }
 

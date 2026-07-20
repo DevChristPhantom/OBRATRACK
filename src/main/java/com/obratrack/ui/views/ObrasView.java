@@ -288,18 +288,40 @@ public class ObrasView extends JPanel {
 
     private void mostrarResumenImportacion(ImportResult resultado) {
         StringBuilder sb = new StringBuilder();
-        sb.append("Importacion completada\n");
-        sb.append("--------------------------------\n");
-        sb.append("Partidas importadas: ").append(resultado.getPartidasImportadas().size()).append("\n");
-        sb.append("Filas omitidas: ").append(resultado.getFilasOmitidas()).append("\n");
-        sb.append("Advertencias: ").append(resultado.getAdvertencias().size()).append("\n");
-        sb.append(String.format("Presupuesto total: S/. %,.2f", resultado.getPresupuestoTotal()));
-        if (!resultado.getAdvertencias().isEmpty()) {
-            sb.append("\n\nPrimeras advertencias:\n");
-            resultado.getAdvertencias().stream().limit(5)
-                    .forEach(a -> sb.append("• ").append(a).append("\n"));
+        sb.append("IMPORTACION COMPLETADA\n");
+        sb.append("========================================\n");
+        sb.append("Partidas importadas : ").append(resultado.getPartidasImportadas().size()).append("\n");
+        sb.append("  - ejecutables     : ").append(resultado.getPartidasEjecutables()).append("\n");
+        sb.append("  - agrupadoras     : ").append(resultado.getPartidasPadre()).append("\n");
+        sb.append("Filas omitidas      : ").append(resultado.getFilasOmitidas()).append("\n");
+        sb.append(String.format("Presupuesto total   : S/. %,.2f%n", resultado.getPresupuestoTotal()));
+        sb.append("Subtotales de seccion: ")
+          .append(resultado.isSubtotalesCuadran() ? "CUADRAN" : "REVISAR (ver advertencias)")
+          .append("\n");
+
+        // Verificacion (mensajes positivos)
+        if (!resultado.getInformes().isEmpty()) {
+            sb.append("\nVERIFICACION\n----------------------------------------\n");
+            resultado.getInformes().forEach(m -> sb.append("• ").append(m).append("\n"));
         }
-        JOptionPane.showMessageDialog(this, sb.toString(), "Importacion de Excel", JOptionPane.INFORMATION_MESSAGE);
+
+        // Todas las advertencias, desplazables
+        if (!resultado.getAdvertencias().isEmpty()) {
+            sb.append("\nADVERTENCIAS (").append(resultado.getAdvertencias().size()).append(")\n");
+            sb.append("----------------------------------------\n");
+            resultado.getAdvertencias().forEach(a -> sb.append("• ").append(a).append("\n"));
+        }
+
+        JTextArea area = new JTextArea(sb.toString(), 22, 70);
+        area.setEditable(false);
+        area.setCaretPosition(0);
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        JScrollPane scroll = new JScrollPane(area);
+        scroll.setPreferredSize(new Dimension(720, 420));
+
+        int tipo = resultado.isSubtotalesCuadran()
+                ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE;
+        JOptionPane.showMessageDialog(this, scroll, "Importacion de Excel — resumen y verificacion", tipo);
     }
 
     private void cargarListado() {

@@ -1,7 +1,6 @@
 package com.obratrack.core;
 
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -11,12 +10,23 @@ import java.sql.Statement;
 /**
  * Gestiona la conexion a la base de datos SQLite embebida.
  * Un solo archivo .db portable, sin servidor, vive junto al .jar/.exe en /data.
+ *
+ * <p><b>Concurrencia:</b> la app usa UNA sola conexion compartida. SQLite (via una
+ * unica {@link Connection}) no es segura para ejecutar sentencias en paralelo desde
+ * varios hilos. Por eso TODO acceso a la base debe realizarse sujetando {@link #LOCK}
+ * (los servicios lo hacen). Esto serializa el trabajo del EDT y de los {@code SwingWorker}
+ * de fondo (p. ej. la carga asincrona del Dashboard), evitando resultados cruzados.
  */
 public final class Database {
 
-    private static final String DB_FOLDER = "data";
     private static final String DB_FILE = "obratrack.db";
     private static Connection connection;
+
+    /**
+     * Candado global de acceso a la base de datos. Cualquier operacion que ejecute
+     * sentencias debe hacerlo dentro de {@code synchronized (Database.LOCK)}.
+     */
+    public static final Object LOCK = new Object();
 
     private Database() {}
 
@@ -40,6 +50,34 @@ public final class Database {
             inicializarEsquema(connection);
         }
         return connection;
+    }
+
+    /** Unidad de trabajo que se ejecuta dentro de una transaccion. */
+    @FunctionalInterface
+    public interface Trabajo {
+        void ejecutar(Connection conn) throws SQLException;
+    }
+
+    /**
+     * Ejecuta varias sentencias de forma atomica y bajo el candado global: si algo
+     * falla, se revierte todo (rollback). Usar para operaciones de mas de un paso
+     * (p. ej. registrar un movimiento y su entrada de auditoria).
+     */
+    public static void enTransaccion(Trabajo trabajo) throws SQLException {
+        synchronized (LOCK) {
+            Connection conn = get();
+            boolean autoCommitPrevio = conn.getAutoCommit();
+            conn.setAutoCommit(false);
+            try {
+                trabajo.ejecutar(conn);
+                conn.commit();
+            } catch (SQLException e) {
+                try { conn.rollback(); } catch (SQLException ignored) {}
+                throw e;
+            } finally {
+                conn.setAutoCommit(autoCommitPrevio);
+            }
+        }
     }
 
     private static void inicializarEsquema(Connection conn) throws SQLException {
@@ -108,6 +146,7 @@ public final class Database {
             """);
 
             // Usuarios del sistema (login). La contrasena se guarda hasheada (PBKDF2), nunca en claro.
+            // debe_cambiar_password = 1 obliga a definir una nueva clave en el proximo ingreso.
             st.execute("""
                 CREATE TABLE IF NOT EXISTS usuario (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -116,6 +155,7 @@ public final class Database {
                     password_hash TEXT NOT NULL,
                     rol TEXT NOT NULL DEFAULT 'ADMIN',
                     activo INTEGER NOT NULL DEFAULT 1,
+                    debe_cambiar_password INTEGER NOT NULL DEFAULT 0,
                     creado_en TEXT
                 );
             """);
@@ -132,10 +172,11 @@ public final class Database {
         migrarColumnas(conn);
     }
 
-    /** Agrega columnas de auditoria a bases de datos creadas antes de esta version. */
+    /** Agrega columnas nuevas a bases de datos creadas antes de esta version. */
     private static void migrarColumnas(Connection conn) throws SQLException {
         agregarColumnaSiFalta(conn, "movimiento_almacen", "creado_en", "TEXT");
         agregarColumnaSiFalta(conn, "movimiento_almacen", "actualizado_en", "TEXT");
+        agregarColumnaSiFalta(conn, "usuario", "debe_cambiar_password", "INTEGER NOT NULL DEFAULT 0");
     }
 
     private static void agregarColumnaSiFalta(Connection conn, String tabla, String columna, String tipo)
@@ -158,10 +199,12 @@ public final class Database {
     }
 
     public static void cerrar() {
-        try {
-            if (connection != null && !connection.isClosed()) {
-                connection.close();
-            }
-        } catch (SQLException ignored) {}
+        synchronized (LOCK) {
+            try {
+                if (connection != null && !connection.isClosed()) {
+                    connection.close();
+                }
+            } catch (SQLException ignored) {}
+        }
     }
 }

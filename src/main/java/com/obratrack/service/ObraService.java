@@ -8,7 +8,11 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
-/** CRUD de obras: crear, listar, actualizar, cambiar estado. */
+/**
+ * CRUD de obras: crear, listar, actualizar, cambiar estado, eliminar.
+ * Todo acceso a la base se serializa bajo {@link Database#LOCK}; el borrado se hace
+ * de forma atomica (auditoria + obra) con {@link Database#enTransaccion}.
+ */
 public class ObraService {
 
     public Obra crear(Obra obra) throws SQLException {
@@ -17,18 +21,20 @@ public class ObraService {
                                presupuesto_total, estado, ruta_excel_origen, fecha_creacion)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """;
-        try (PreparedStatement ps = Database.get().prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, obra.getNombre());
-            ps.setString(2, obra.getDescripcion());
-            ps.setString(3, str(obra.getFechaInicio()));
-            ps.setString(4, str(obra.getFechaFinEstimada()));
-            ps.setDouble(5, obra.getPresupuestoTotal());
-            ps.setString(6, obra.getEstado().name());
-            ps.setString(7, obra.getRutaExcelOrigen());
-            ps.setString(8, str(obra.getFechaCreacion() != null ? obra.getFechaCreacion() : LocalDate.now()));
-            ps.executeUpdate();
-            try (ResultSet rs = ps.getGeneratedKeys()) {
-                if (rs.next()) obra.setId(rs.getLong(1));
+        synchronized (Database.LOCK) {
+            try (PreparedStatement ps = Database.get().prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+                ps.setString(1, obra.getNombre());
+                ps.setString(2, obra.getDescripcion());
+                ps.setString(3, str(obra.getFechaInicio()));
+                ps.setString(4, str(obra.getFechaFinEstimada()));
+                ps.setDouble(5, obra.getPresupuestoTotal());
+                ps.setString(6, obra.getEstado().name());
+                ps.setString(7, obra.getRutaExcelOrigen());
+                ps.setString(8, str(obra.getFechaCreacion() != null ? obra.getFechaCreacion() : LocalDate.now()));
+                ps.executeUpdate();
+                try (ResultSet rs = ps.getGeneratedKeys()) {
+                    if (rs.next()) obra.setId(rs.getLong(1));
+                }
             }
         }
         return obra;
@@ -37,10 +43,12 @@ public class ObraService {
     public List<Obra> listarTodas() throws SQLException {
         List<Obra> resultado = new ArrayList<>();
         String sql = "SELECT * FROM obra ORDER BY fecha_creacion DESC, id DESC";
-        try (Statement st = Database.get().createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-            while (rs.next()) {
-                resultado.add(mapear(rs));
+        synchronized (Database.LOCK) {
+            try (Statement st = Database.get().createStatement();
+                 ResultSet rs = st.executeQuery(sql)) {
+                while (rs.next()) {
+                    resultado.add(mapear(rs));
+                }
             }
         }
         return resultado;
@@ -49,10 +57,12 @@ public class ObraService {
     public List<Obra> listarActivas() throws SQLException {
         List<Obra> resultado = new ArrayList<>();
         String sql = "SELECT * FROM obra WHERE estado = 'ACTIVA' ORDER BY nombre";
-        try (Statement st = Database.get().createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
-            while (rs.next()) {
-                resultado.add(mapear(rs));
+        synchronized (Database.LOCK) {
+            try (Statement st = Database.get().createStatement();
+                 ResultSet rs = st.executeQuery(sql)) {
+                while (rs.next()) {
+                    resultado.add(mapear(rs));
+                }
             }
         }
         return resultado;
@@ -60,28 +70,34 @@ public class ObraService {
 
     public void actualizarPresupuestoTotal(long obraId, double total) throws SQLException {
         String sql = "UPDATE obra SET presupuesto_total = ? WHERE id = ?";
-        try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
-            ps.setDouble(1, total);
-            ps.setLong(2, obraId);
-            ps.executeUpdate();
+        synchronized (Database.LOCK) {
+            try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
+                ps.setDouble(1, total);
+                ps.setLong(2, obraId);
+                ps.executeUpdate();
+            }
         }
     }
 
     public void actualizarRutaExcel(long obraId, String ruta) throws SQLException {
         String sql = "UPDATE obra SET ruta_excel_origen = ? WHERE id = ?";
-        try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
-            ps.setString(1, ruta);
-            ps.setLong(2, obraId);
-            ps.executeUpdate();
+        synchronized (Database.LOCK) {
+            try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
+                ps.setString(1, ruta);
+                ps.setLong(2, obraId);
+                ps.executeUpdate();
+            }
         }
     }
 
     public void cambiarEstado(long obraId, Obra.Estado estado) throws SQLException {
         String sql = "UPDATE obra SET estado = ? WHERE id = ?";
-        try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
-            ps.setString(1, estado.name());
-            ps.setLong(2, obraId);
-            ps.executeUpdate();
+        synchronized (Database.LOCK) {
+            try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
+                ps.setString(1, estado.name());
+                ps.setLong(2, obraId);
+                ps.executeUpdate();
+            }
         }
     }
 
@@ -98,32 +114,36 @@ public class ObraService {
             SET nombre = ?, descripcion = ?, fecha_inicio = ?, fecha_fin_estimada = ?, estado = ?
             WHERE id = ?
         """;
-        try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
-            ps.setString(1, obra.getNombre().trim());
-            ps.setString(2, obra.getDescripcion());
-            ps.setString(3, str(obra.getFechaInicio()));
-            ps.setString(4, str(obra.getFechaFinEstimada()));
-            ps.setString(5, obra.getEstado().name());
-            ps.setLong(6, obra.getId());
-            ps.executeUpdate();
+        synchronized (Database.LOCK) {
+            try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
+                ps.setString(1, obra.getNombre().trim());
+                ps.setString(2, obra.getDescripcion());
+                ps.setString(3, str(obra.getFechaInicio()));
+                ps.setString(4, str(obra.getFechaFinEstimada()));
+                ps.setString(5, obra.getEstado().name());
+                ps.setLong(6, obra.getId());
+                ps.executeUpdate();
+            }
         }
     }
 
     /**
-     * Elimina la obra y todo lo asociado: sus partidas y movimientos se borran en cascada
-     * (FOREIGN KEY ON DELETE CASCADE); el historial de auditoria se limpia aparte porque
-     * esa tabla no tiene clave foranea.
+     * Elimina la obra y todo lo asociado, de forma atomica: sus partidas y movimientos
+     * se borran en cascada (FOREIGN KEY ON DELETE CASCADE); el historial de auditoria se
+     * limpia aparte porque esa tabla no tiene clave foranea. Si algo falla, se revierte todo.
      */
     public void eliminar(long obraId) throws SQLException {
-        try (PreparedStatement ps = Database.get().prepareStatement(
-                "DELETE FROM movimiento_auditoria WHERE obra_id = ?")) {
-            ps.setLong(1, obraId);
-            ps.executeUpdate();
-        }
-        try (PreparedStatement ps = Database.get().prepareStatement("DELETE FROM obra WHERE id = ?")) {
-            ps.setLong(1, obraId);
-            ps.executeUpdate();
-        }
+        Database.enTransaccion(conn -> {
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "DELETE FROM movimiento_auditoria WHERE obra_id = ?")) {
+                ps.setLong(1, obraId);
+                ps.executeUpdate();
+            }
+            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM obra WHERE id = ?")) {
+                ps.setLong(1, obraId);
+                ps.executeUpdate();
+            }
+        });
     }
 
     private Obra mapear(ResultSet rs) throws SQLException {

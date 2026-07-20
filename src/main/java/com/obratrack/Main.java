@@ -1,12 +1,15 @@
 package com.obratrack;
 
-import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLightLaf;
 import com.obratrack.core.AppInfo;
 import com.obratrack.core.AppLog;
 import com.obratrack.core.Database;
 import com.obratrack.core.ManejadorErrores;
 import com.obratrack.core.RespaldoDB;
+import com.obratrack.model.Usuario;
+import com.obratrack.service.SesionActual;
 import com.obratrack.service.UsuarioService;
+import com.obratrack.ui.CambioPasswordObligatorio;
 import com.obratrack.ui.LoginView;
 import com.obratrack.ui.MainWindow;
 
@@ -23,7 +26,7 @@ public class Main {
         Logger log = AppLog.get(Main.class);
         log.info("Iniciando " + AppInfo.NOMBRE + " " + AppInfo.VERSION);
 
-        FlatDarkLaf.setup();
+        FlatLightLaf.setup();
         UIManager.put("defaultFont", new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 13));
 
         SwingUtilities.invokeLater(() -> {
@@ -49,6 +52,17 @@ public class Main {
 
     /** Abre la ventana principal tras un login correcto. */
     private static void abrirPrincipal() {
+        Usuario u = SesionActual.getUsuario();
+        // Si la cuenta esta marcada para cambio de clave (p. ej. admin de fabrica),
+        // se obliga a definir una nueva antes de entrar.
+        if (u != null && u.isDebeCambiarPassword()) {
+            boolean cambiada = CambioPasswordObligatorio.mostrar(u);
+            if (!cambiada) {
+                SesionActual.cerrar();
+                new LoginView(Main::abrirPrincipal).setVisible(true);
+                return;
+            }
+        }
         new MainWindow().setVisible(true);
     }
 }

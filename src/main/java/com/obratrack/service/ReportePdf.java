@@ -59,7 +59,7 @@ public class ReportePdf {
 
                 String[] valores = {
                         p.getCodigo() != null ? p.getCodigo() : "",
-                        truncar(p.getDescripcion(), 55),
+                        p.getDescripcion() != null ? p.getDescripcion() : "",
                         p.getUnidad() != null ? p.getUnidad() : "",
                         p.isEsPadre() ? "" : fmt(presup),
                         p.isEsPadre() ? "" : fmt(ejec),
@@ -99,7 +99,7 @@ public class ReportePdf {
             for (MovimientoAlmacen m : movimientos) {
                 String[] valores = {
                         m.getFecha().toString(),
-                        truncar(m.getPartidaCodigo() + " - " + m.getPartidaDescripcion(), 60),
+                        m.getPartidaCodigo() + " - " + m.getPartidaDescripcion(),
                         m.getTipo().name(),
                         fmt(m.getCantidad()),
                         fmt(m.getCostoUnitarioReal()),
@@ -173,11 +173,6 @@ public class ReportePdf {
         return String.format("%,.2f", v);
     }
 
-    private String truncar(String s, int max) {
-        if (s == null) return "";
-        return s.length() <= max ? s : s.substring(0, max) + "...";
-    }
-
     private String sanitizar(String texto) {
         if (texto == null) return "obra";
         return texto.replaceAll("[^a-zA-Z0-9]", "_").replaceAll("_+", "_");
@@ -235,7 +230,7 @@ public class ReportePdf {
             stream.fill();
             stream.setNonStrokingColor(255, 255, 255);
             for (int i = 0; i < cols.length; i++) {
-                texto(cols[i], x + 3, y - ALTO_FILA + 9, FUENTE_BOLD, TAM_FUENTE);
+                texto(ajustarAncho(cols[i], FUENTE_BOLD, TAM_FUENTE, anchos[i] - 6), x + 3, y - ALTO_FILA + 9, FUENTE_BOLD, TAM_FUENTE);
                 x += anchos[i];
             }
             stream.setNonStrokingColor(0, 0, 0);
@@ -250,7 +245,7 @@ public class ReportePdf {
             float x = MARGEN;
             PDFont fuente = esPadre ? FUENTE_BOLD : FUENTE;
             for (int i = 0; i < valores.length; i++) {
-                texto(valores[i], x + 3, y - 13, fuente, TAM_FUENTE);
+                texto(ajustarAncho(valores[i], fuente, TAM_FUENTE, anchos[i] - 6), x + 3, y - 13, fuente, TAM_FUENTE);
                 x += anchos[i];
             }
             // linea inferior
@@ -272,7 +267,7 @@ public class ReportePdf {
             stream.setNonStrokingColor(0, 0, 0);
             float x = MARGEN;
             for (int i = 0; i < valores.length; i++) {
-                texto(valores[i], x + 3, y - 13, FUENTE_BOLD, TAM_FUENTE);
+                texto(ajustarAncho(valores[i], FUENTE_BOLD, TAM_FUENTE, anchos[i] - 6), x + 3, y - 13, FUENTE_BOLD, TAM_FUENTE);
                 x += anchos[i];
             }
             y -= ALTO_FILA;
@@ -290,6 +285,29 @@ public class ReportePdf {
         /** PDFBox con fuentes estandar no soporta algunos caracteres; los limpiamos. */
         private String limpiar(String txt) {
             return txt.replaceAll("[^\\x20-\\x7E]", "");
+        }
+
+        /** Ancho real (en puntos) que ocupa un texto con la fuente y tamano dados. */
+        private float anchoTexto(String s, PDFont fuente, float tam) throws IOException {
+            return fuente.getStringWidth(limpiar(s)) / 1000f * tam;
+        }
+
+        /**
+         * Recorta el texto con puntos suspensivos para que quepa exactamente en el ancho
+         * disponible de su columna. Evita que una celda (p. ej. la descripcion) invada la
+         * siguiente y se solapen las letras en el PDF.
+         */
+        private String ajustarAncho(String txt, PDFont fuente, float tam, float anchoDisponible) throws IOException {
+            if (txt == null) return "";
+            String limpio = limpiar(txt);
+            if (anchoDisponible <= 0) return "";
+            if (anchoTexto(limpio, fuente, tam) <= anchoDisponible) return limpio;
+            String puntos = "...";
+            int i = limpio.length();
+            while (i > 0 && anchoTexto(limpio.substring(0, i) + puntos, fuente, tam) > anchoDisponible) {
+                i--;
+            }
+            return i <= 0 ? "" : limpio.substring(0, i) + puntos;
         }
 
         void cerrar() throws IOException {

@@ -14,6 +14,8 @@ public class Usuario {
     private Rol rol = Rol.ADMIN;
     private boolean activo = true;
     private String creadoEn;
+    /** Cuando es true, se obliga a cambiar la contrasena en el proximo ingreso. */
+    private boolean debeCambiarPassword = false;
 
     public Usuario() {}
 
@@ -40,6 +42,9 @@ public class Usuario {
 
     public String getCreadoEn() { return creadoEn; }
     public void setCreadoEn(String creadoEn) { this.creadoEn = creadoEn; }
+
+    public boolean isDebeCambiarPassword() { return debeCambiarPassword; }
+    public void setDebeCambiarPassword(boolean debeCambiarPassword) { this.debeCambiarPassword = debeCambiarPassword; }
 
     /** Nombre para mostrar: el nombre completo si existe, si no el username. */
     public String getNombreParaMostrar() {

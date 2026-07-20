@@ -287,6 +287,7 @@ public class ExcelImporter {
             }
 
             detectarCodigosDuplicados(resultado);
+            calcularSubtotalesYValidar(resultado);
 
         } catch (java.io.FileNotFoundException e) {
             resultado.agregarError("No se encontro el archivo. Verifica la ruta: " + rutaArchivo);
@@ -368,6 +369,23 @@ public class ExcelImporter {
                 resultado.agregarAdvertencia("Fila " + (i + 1) + ": '" + truncar(descripcion, 50) + "' tiene unidad pero cantidad 0 o vacia.");
             }
 
+            // Verificacion de coherencia por partida ejecutable: total del Excel vs cantidad x precio.
+            // Detecta columnas mal mapeadas o numeros mal leidos.
+            if (tieneUnidad && total != null && total > 0 && cantidad != null && cantidad > 0
+                    && precio != null && precio > 0) {
+                double calc = cantidad * precio;
+                double tol = Math.max(1.0, total * 0.01); // 1% o 1 sol
+                if (Math.abs(calc - total) > tol) {
+                    resultado.agregarAdvertencia(String.format(
+                            "Fila %d: '%s' -> el total del Excel (S/. %,.2f) no coincide con cantidad x precio (%,.2f x %,.2f = S/. %,.2f). Se respeto el total del Excel.",
+                            i + 1, truncar(descripcion, 40), total, cantidad, precio, calc));
+                }
+            }
+            if (tieneUnidad && (codigo == null || codigo.isBlank())) {
+                resultado.agregarAdvertencia("Fila " + (i + 1) + ": '" + truncar(descripcion, 40)
+                        + "' es una partida ejecutable SIN codigo. No se podra agrupar en ningun subtotal de seccion.");
+            }
+
             resultado.getPartidasImportadas().add(p);
             if (tieneUnidad) {
                 sumaEjecutables += totalCalculado;
@@ -375,6 +393,82 @@ public class ExcelImporter {
         }
 
         resultado.setPresupuestoTotal(sumaEjecutables);
+    }
+
+    /**
+     * Calcula el subtotal de cada partida agrupadora (padre) como la SUMA de las partidas
+     * ejecutables que cuelgan de ella (segun el codigo jerarquico: una hoja "01.02.03.01"
+     * pertenece a los padres "01", "01.02" y "01.02.03"). Ademas RECONCILIA ese subtotal
+     * calculado contra el subtotal que traia el propio Excel en la columna de total:
+     * si no cuadran (mas alla de una tolerancia), lo reporta como advertencia y prevalece
+     * la suma real de las partidas. Es la parte mas minuciosa: garantiza que lo importado
+     * sea internamente consistente.
+     */
+    private void calcularSubtotalesYValidar(ImportResult resultado) {
+        List<Partida> partidas = resultado.getPartidasImportadas();
+        int padres = 0;
+        int descuadres = 0;
+
+        for (Partida padre : partidas) {
+            if (!padre.isEsPadre()) continue;
+            padres++;
+
+            String codigoPadre = padre.getCodigo();
+            double subtotalExcel = padre.getCostoTotalPresupuestado(); // lo que traia el Excel (o 0)
+
+            if (codigoPadre == null || codigoPadre.isBlank()) {
+                // Sin codigo no podemos hacer roll-up: conservamos lo que trajo el Excel.
+                continue;
+            }
+
+            String prefijo = codigoPadre.trim() + ".";
+            double sumaHijas = 0;
+            int nHijas = 0;
+            for (Partida hija : partidas) {
+                if (hija.isEsPadre()) continue;
+                String codHija = hija.getCodigo();
+                if (codHija != null && codHija.trim().startsWith(prefijo)) {
+                    sumaHijas += hija.getCostoTotalPresupuestado();
+                    nHijas++;
+                }
+            }
+
+            // El subtotal mostrado sera la suma real de las partidas (si tiene hijas);
+            // si el padre no tiene hijas ejecutables, se respeta el valor del Excel.
+            double subtotalFinal = nHijas > 0 ? sumaHijas : subtotalExcel;
+            padre.setCostoTotalPresupuestado(subtotalFinal);
+
+            // Reconciliacion: si el Excel declaraba un subtotal y no cuadra con la suma real.
+            if (subtotalExcel > 0 && nHijas > 0) {
+                double dif = Math.abs(subtotalExcel - sumaHijas);
+                double tol = Math.max(1.0, subtotalExcel * 0.005); // 0.5% o 1 sol
+                if (dif > tol) {
+                    descuadres++;
+                    resultado.agregarAdvertencia(String.format(
+                            "Subtotal de la seccion '%s %s': el Excel indica S/. %,.2f pero la suma de sus %d partidas es S/. %,.2f (diferencia S/. %,.2f). Se uso la suma real de las partidas.",
+                            codigoPadre.trim(), truncar(padre.getDescripcion(), 40),
+                            subtotalExcel, nHijas, sumaHijas, dif));
+                }
+            }
+        }
+
+        resultado.setPartidasPadre(padres);
+        resultado.setSubtotalesCuadran(descuadres == 0);
+
+        // Mensaje de verificacion final (positivo) para dar confianza de que se importo bien.
+        int ejecutables = partidas.size() - padres;
+        if (descuadres == 0) {
+            resultado.agregarInforme(String.format(
+                    "Verificacion OK: %d partidas (%d ejecutables, %d agrupadoras). "
+                    + "Presupuesto total: S/. %,.2f. Todos los subtotales de seccion cuadran con la suma de sus partidas.",
+                    partidas.size(), ejecutables, padres, resultado.getPresupuestoTotal()));
+        } else {
+            resultado.agregarInforme(String.format(
+                    "Importacion revisada: %d partidas (%d ejecutables, %d agrupadoras). "
+                    + "Presupuesto total (suma de ejecutables): S/. %,.2f. "
+                    + "%d subtotal(es) de seccion NO cuadraban con el Excel; se corrigieron con la suma real (ver advertencias).",
+                    partidas.size(), ejecutables, padres, resultado.getPresupuestoTotal(), descuadres));
+        }
     }
 
     // ---------- utilidades ----------

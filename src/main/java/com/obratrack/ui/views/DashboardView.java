@@ -57,8 +57,7 @@ public class DashboardView extends JPanel {
     private int generacion = 0;
     private final javax.swing.Timer spinnerTimer =
             new javax.swing.Timer(80, e -> { spinnerAngulo = (spinnerAngulo + 30) % 360; repaint(); });
-    /** Serializa el acceso a la unica conexion SQLite entre workers en segundo plano. */
-    private static final Object DB_LOCK = new Object();
+    // La serializacion del acceso a la base la maneja el candado global Database.LOCK.
 
     /** Paleta ciclica para los grupos de los graficos. */
     private static final Color[] PALETA = {
@@ -231,8 +230,8 @@ public class DashboardView extends JPanel {
         SwingWorker<DatosDashboard, Void> worker = new SwingWorker<>() {
             @Override
             protected DatosDashboard doInBackground() throws Exception {
-                // Una sola conexion SQLite compartida: serializamos el trabajo de fondo.
-                synchronized (DB_LOCK) {
+                // Snapshot consistente y serializado con el resto de la app (candado global).
+                synchronized (com.obratrack.core.Database.LOCK) {
                     return calcular(obra);
                 }
             }

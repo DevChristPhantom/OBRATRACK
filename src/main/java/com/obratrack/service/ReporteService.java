@@ -11,7 +11,6 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -26,7 +25,6 @@ import java.util.Map;
  */
 public class ReporteService {
 
-    private static final String CARPETA_EXPORTS = "exports";
     private static final DateTimeFormatter FMT_ARCHIVO = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
     private final PartidaService partidaService = new PartidaService();
@@ -243,8 +241,23 @@ public class ReporteService {
 
     private void crearCeldaTexto(Row fila, int col, String valor, CellStyle estilo) {
         Cell c = fila.createCell(col);
-        c.setCellValue(valor);
+        c.setCellValue(celdaSegura(valor));
         if (estilo != null) c.setCellStyle(estilo);
+    }
+
+    /**
+     * Neutraliza la inyeccion de formulas (CSV/Excel injection): si el texto empieza por
+     * un caracter que Excel/LibreOffice interpretarian como formula, se le antepone un
+     * apostrofo para que se trate como texto literal. Los datos provienen de entradas del
+     * usuario o de Excel importados, asi que no son de confianza.
+     */
+    private String celdaSegura(String valor) {
+        if (valor == null || valor.isEmpty()) return valor;
+        char c0 = valor.charAt(0);
+        if (c0 == '=' || c0 == '+' || c0 == '-' || c0 == '@' || c0 == '\t' || c0 == '\r') {
+            return "'" + valor;
+        }
+        return valor;
     }
 
     private void crearCeldaNumero(Row fila, int col, double valor, CellStyle estilo) {
