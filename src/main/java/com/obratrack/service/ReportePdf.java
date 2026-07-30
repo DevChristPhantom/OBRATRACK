@@ -182,7 +182,7 @@ public class ReportePdf {
      * Encapsula el dibujo sobre el PDF: maneja la posicion vertical actual,
      * el salto de pagina automatico y el stream de contenido.
      */
-    private static class Lienzo {
+    private static final class Lienzo {
         private final PDDocument doc;
         private final PDRectangle tamPagina;
         private final boolean horizontal;
@@ -190,8 +190,6 @@ public class ReportePdf {
         private PDPageContentStream stream;
         private float y;
         private float anchoUtil;
-        private String[] colsHeaderPendiente;
-        private float[] anchosHeaderPendiente;
 
         Lienzo(PDDocument doc, PDRectangle tam, boolean horizontal) throws IOException {
             this.doc = doc;
@@ -222,8 +220,6 @@ public class ReportePdf {
         }
 
         void dibujarHeaderTabla(String[] cols, float[] anchos) throws IOException {
-            this.colsHeaderPendiente = cols;
-            this.anchosHeaderPendiente = anchos;
             float x = MARGEN;
             stream.setNonStrokingColor(40, 60, 110);
             stream.addRect(MARGEN, y - ALTO_FILA + 4, anchoUtil, ALTO_FILA);

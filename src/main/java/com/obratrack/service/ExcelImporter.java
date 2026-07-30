@@ -62,7 +62,6 @@ public class ExcelImporter {
         public int colCantidad = -1;
         public int colPrecio = -1;
         public int colTotal = -1;
-        public Sheet hoja;
         public String nombreHoja;
         public int totalHojasEnLibro = 1;
 
@@ -112,7 +111,6 @@ public class ExcelImporter {
     /** Escanea las primeras filas de una hoja y devuelve la estructura de columnas detectada. */
     private EstructuraDetectada detectarEnHoja(Sheet hoja, int totalHojas) {
         EstructuraDetectada estructura = new EstructuraDetectada();
-        estructura.hoja = hoja;
         estructura.nombreHoja = hoja.getSheetName();
         estructura.totalHojasEnLibro = totalHojas;
 
@@ -386,7 +384,7 @@ public class ExcelImporter {
                         + "' es una partida ejecutable SIN codigo. No se podra agrupar en ningun subtotal de seccion.");
             }
 
-            resultado.getPartidasImportadas().add(p);
+            resultado.agregarPartida(p);
             if (tieneUnidad) {
                 sumaEjecutables += totalCalculado;
             }

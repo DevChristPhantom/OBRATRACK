@@ -3,6 +3,7 @@ package com.obratrack.service;
 import com.obratrack.model.Partida;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /** Resultado detallado de una importacion de Excel, para mostrar al usuario. */
@@ -18,10 +19,10 @@ public class ImportResult {
     private boolean subtotalesCuadran = true;
     private boolean exitoso = false;
 
-    public List<Partida> getPartidasImportadas() { return partidasImportadas; }
-    public List<String> getAdvertencias() { return advertencias; }
-    public List<String> getErrores() { return errores; }
-    public List<String> getInformes() { return informes; }
+    public List<Partida> getPartidasImportadas() { return Collections.unmodifiableList(partidasImportadas); }
+    public List<String> getAdvertencias() { return Collections.unmodifiableList(advertencias); }
+    public List<String> getErrores() { return Collections.unmodifiableList(errores); }
+    public List<String> getInformes() { return Collections.unmodifiableList(informes); }
 
     public int getFilasOmitidas() { return filasOmitidas; }
     public void incrementarFilasOmitidas() { filasOmitidas++; }
@@ -40,6 +41,8 @@ public class ImportResult {
 
     public boolean isExitoso() { return exitoso; }
     public void setExitoso(boolean exitoso) { this.exitoso = exitoso; }
+
+    public void agregarPartida(Partida p) { partidasImportadas.add(p); }
 
     public void agregarAdvertencia(String msg) { advertencias.add(msg); }
     public void agregarError(String msg) { errores.add(msg); }

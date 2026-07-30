@@ -226,7 +226,7 @@ public class ComparativoView extends JPanel {
     }
 
     /** Colorea la columna "% Presup." segun el avance (verde/amarillo/rojo). */
-    private class FilaColorRenderer extends javax.swing.table.DefaultTableCellRenderer {
+    private static class FilaColorRenderer extends javax.swing.table.DefaultTableCellRenderer {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
                                                         boolean hasFocus, int row, int column) {

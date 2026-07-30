@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Ventana principal: barra superior con obra activa + sidebar de navegacion + area de contenido. */
-public class MainWindow extends JFrame {
+public final class MainWindow extends JFrame {
 
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contenido = new JPanel(cardLayout);

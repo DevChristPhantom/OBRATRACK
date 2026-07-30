@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Exclusiones de SpotBugs para patrones intencionales del diseño de ObraTrack,
+    no bugs. Cada entrada documenta por que el hallazgo es un falso positivo aqui.
+    Ver docs/AUDITORIA.md para el contexto de la arquitectura de acceso a datos.
+-->
+<FindBugsFilter>
+
+    <!--
+        Database.get() expone a proposito la unica Connection compartida: toda la app
+        depende de que sea la MISMA instancia (por eso existe Database.LOCK). Devolver
+        una copia rompería el modelo de concurrencia documentado en la clase.
+    -->
+    <Match>
+        <Class name="com.obratrack.core.Database" />
+        <Method name="get" />
+        <Bug pattern="MS_EXPOSE_REP" />
+    </Match>
+
+    <!--
+        SesionActual es el holder intencional del usuario logueado (patron singleton de
+        sesion, app de escritorio de un solo usuario por proceso). Guardar/exponer la
+        referencia directa es el comportamiento buscado; una copia defensiva no aporta
+        nada porque no hay otro hilo/usuario con el que aislar el estado.
+    -->
+    <Match>
+        <Class name="com.obratrack.service.SesionActual" />
+        <Bug pattern="EI_EXPOSE_STATIC_REP2,MS_EXPOSE_REP" />
+    </Match>
+
+    <!--
+        MainWindow.confirmarSalida() llama System.exit(0) solo despues de que el usuario
+        confirma explicitamente el dialogo "Salir" - es la accion de cerrar la app, no un
+        efecto secundario oculto.
+    -->
+    <Match>
+        <Class name="com.obratrack.ui.MainWindow" />
+        <Method name="confirmarSalida" />
+        <Bug pattern="DM_EXIT" />
+    </Match>
+
+</FindBugsFilter>

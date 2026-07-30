@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.sql.Statement;
+import java.sql.PreparedStatement;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -39,9 +39,10 @@ public final class RespaldoDB {
     public static Path respaldarAhora() throws Exception {
         Path dir = Rutas.backups();
         Path destino = dir.resolve("obratrack_" + LocalDateTime.now().format(FMT) + ".db");
-        String ruta = destino.toString().replace("\\", "/").replace("'", "''");
-        try (Statement st = Database.get().createStatement()) {
-            st.execute("VACUUM INTO '" + ruta + "'");
+        String ruta = destino.toString().replace("\\", "/");
+        try (PreparedStatement ps = Database.get().prepareStatement("VACUUM INTO ?")) {
+            ps.setString(1, ruta);
+            ps.execute();
         }
         purgarAntiguos(dir);
         return destino;

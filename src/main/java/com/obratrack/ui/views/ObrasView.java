@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /** Vista de gestion de obras: crear nueva obra y cargar su Excel de presupuesto. */
-public class ObrasView extends JPanel {
+public final class ObrasView extends JPanel {
 
     private final ObraService obraService = new ObraService();
     private final PartidaService partidaService = new PartidaService();
