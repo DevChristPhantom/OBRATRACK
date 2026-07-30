@@ -23,6 +23,14 @@ jobs:
       - name: Compilar y correr tests (con cobertura)
         run: mvn -B clean verify
 
+      - name: Checkstyle (estilo de codigo, no bloqueante)
+        if: always()
+        run: mvn -B checkstyle:check
+
+      - name: SpotBugs (analisis estatico de bugs, no bloqueante)
+        if: always()
+        run: mvn -B spotbugs:check
+
       - name: Publicar reporte de cobertura JaCoCo
         if: always()
         uses: actions/upload-artifact@v4
@@ -36,3 +44,10 @@ jobs:
         with:
           name: surefire-reports
           path: target/surefire-reports/
+
+      - name: Publicar reporte de SpotBugs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spotbugs-report
+          path: target/spotbugsXml.xml

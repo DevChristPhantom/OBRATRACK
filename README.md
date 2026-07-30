@@ -1,5 +1,9 @@
 # ObraTrack
 
+[![CI](https://github.com/DevChristPhantom/OBRATRACK/actions/workflows/ci.yml/badge.svg)](https://github.com/DevChristPhantom/OBRATRACK/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Java](https://img.shields.io/badge/Java-17-orange.svg)](pom.xml)
+
 Sistema de escritorio para gestionar la ejecución de obras: importa el presupuesto desde
 un Excel de licitación, registra ingresos/egresos de materiales por partida, y muestra un
 dashboard de presupuestado vs. ejecutado en tiempo real.
@@ -33,6 +37,21 @@ Si IntelliJ marca el proyecto en rojo al abrirlo, ve a la pestaña **Maven** (la
 ícono de refrescar (🔄 *Reload All Maven Projects*).
 
 ---
+
+## Build por línea de comandos
+
+El proyecto incluye Maven Wrapper, así que no hace falta tener Maven instalado:
+
+```bat
+mvnw.cmd clean verify
+```
+
+Esto compila, corre los 36 tests unitarios (JUnit 5) y genera el reporte de cobertura JaCoCo en
+`target/site/jacoco/index.html`. Para solo generar el jar ejecutable sin correr tests:
+
+```bat
+mvnw.cmd -DskipTests package
+```
 
 ## Cómo generar el `.exe` (Windows)
 

@@ -1,6 +1,10 @@
 target/
 build/
 *.class
+dist-installer/
+dist-portable/
+packaging/app-input/
+dependency-reduced-pom.xml
 data/*.db
 data/*.db-wal
 data/*.db-shm
