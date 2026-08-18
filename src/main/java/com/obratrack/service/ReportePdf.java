@@ -365,9 +365,14 @@ public class ReportePdf implements IReportePdf {
             stream.endText();
         }
 
-        /** PDFBox con fuentes estandar no soporta algunos caracteres; los limpiamos. */
+        /**
+         * PDFBox con fuentes estandar no soporta algunos caracteres; los limpiamos. Los
+         * saltos de linea (p. ej. en un campo multilinea como sectores/bloques) se
+         * cambian por un espacio primero, para que las palabras no queden pegadas al
+         * perder el salto (en vez de "SueloAgua" queda "Suelo Agua").
+         */
         private String limpiar(String txt) {
-            return txt.replaceAll("[^\\x20-\\x7E]", "");
+            return txt.replaceAll("[\\r\\n]+", " ").replaceAll("[^\\x20-\\x7E]", "");
         }
 
         /** Ancho real (en puntos) que ocupa un texto con la fuente y tamano dados. */

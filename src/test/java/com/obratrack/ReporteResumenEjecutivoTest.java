@@ -8,6 +8,8 @@ import com.obratrack.service.ObraService;
 import com.obratrack.service.PartidaService;
 import com.obratrack.service.ReportePdf;
 import com.obratrack.service.ReporteService;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -67,6 +69,31 @@ class ReporteResumenEjecutivoTest {
 
         Files.deleteIfExists(excel);
         Files.deleteIfExists(pdf);
+    }
+
+    /**
+     * Regresion detectada probando la app en vivo: un campo multilinea (sectores/bloques)
+     * perdia el salto de linea al limpiarse para el PDF y las palabras quedaban pegadas
+     * ("...administrativoSector B..."). Verifica que ahora quede un espacio.
+     */
+    @Test
+    void elSaltoDeLineaEnSectoresBloquesNoPegaLasPalabrasEnElPdf() throws Exception {
+        Obra o = new Obra("OBRA_SECTORES_" + nano, "", LocalDate.now(), null);
+        o.setEstado(Obra.Estado.ACTIVA);
+        o.setSectoresBloques("Sector A: Pabellon administrativo\nSector B: Aulas");
+        obraService.crear(o);
+        obraId = o.getId();
+
+        Path pdf = reportePdf.exportarResumenEjecutivoPdf(o);
+        String texto;
+        try (PDDocument doc = PDDocument.load(pdf.toFile())) {
+            texto = new PDFTextStripper().getText(doc);
+        }
+        Files.deleteIfExists(pdf);
+
+        assertFalse(texto.contains("administrativoSector"),
+                "las palabras de dos lineas distintas no deben quedar pegadas");
+        assertTrue(texto.contains("Sector A: Pabellon administrativo Sector B: Aulas"));
     }
 
     @AfterEach
