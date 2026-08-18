@@ -49,6 +49,50 @@ class ObraServiceTest {
     }
 
     @Test
+    void guardaYRecuperaLosCamposDeMemoriaDescriptiva() throws Exception {
+        Obra o = new Obra("OBRA_MEMORIA_" + nano, "", LocalDate.now(), null);
+        o.setEstado(Obra.Estado.ACTIVA);
+        o.setUbicacion("El Algarrobal, Ilo, Moquegua");
+        o.setEntidadContratante("Municipalidad Distrital de Ilo");
+        o.setModalidadEjecucion(Obra.ModalidadEjecucion.ADMINISTRACION_DIRECTA);
+        o.setSectoresBloques("Sector A: Pabellon administrativo\nSector B: Aulas");
+        obraService.crear(o);
+        obraId = o.getId();
+
+        Obra recargada = obraService.listarTodas().stream()
+                .filter(x -> x.getId().equals(obraId)).findFirst().orElseThrow();
+        assertEquals("El Algarrobal, Ilo, Moquegua", recargada.getUbicacion());
+        assertEquals("Municipalidad Distrital de Ilo", recargada.getEntidadContratante());
+        assertEquals(Obra.ModalidadEjecucion.ADMINISTRACION_DIRECTA, recargada.getModalidadEjecucion());
+        assertEquals("Sector A: Pabellon administrativo\nSector B: Aulas", recargada.getSectoresBloques());
+
+        recargada.setUbicacion("Otra ubicacion");
+        recargada.setModalidadEjecucion(Obra.ModalidadEjecucion.CONTRATA);
+        obraService.actualizar(recargada);
+        Obra reeditada = obraService.listarTodas().stream()
+                .filter(x -> x.getId().equals(obraId)).findFirst().orElseThrow();
+        assertEquals("Otra ubicacion", reeditada.getUbicacion());
+        assertEquals(Obra.ModalidadEjecucion.CONTRATA, reeditada.getModalidadEjecucion());
+        obraId = null;
+        obraService.eliminar(o.getId());
+    }
+
+    @Test
+    void losCamposDeMemoriaDescriptivaQuedanNulosSiNoSeInforman() throws Exception {
+        Obra o = new Obra("OBRA_SIN_MEMORIA_" + nano, "", LocalDate.now(), null);
+        o.setEstado(Obra.Estado.ACTIVA);
+        obraService.crear(o);
+        obraId = o.getId();
+
+        Obra recargada = obraService.listarTodas().stream()
+                .filter(x -> x.getId().equals(obraId)).findFirst().orElseThrow();
+        assertNull(recargada.getUbicacion());
+        assertNull(recargada.getEntidadContratante());
+        assertNull(recargada.getModalidadEjecucion());
+        assertNull(recargada.getSectoresBloques());
+    }
+
+    @Test
     void eliminarBorraPartidasYMovimientosEnCascada() throws Exception {
         Obra o = new Obra("OBRA_CASC_" + nano, "", LocalDate.now(), null);
         o.setEstado(Obra.Estado.ACTIVA);

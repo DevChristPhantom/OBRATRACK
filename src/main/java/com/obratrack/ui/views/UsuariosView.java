@@ -1,7 +1,8 @@
 package com.obratrack.ui.views;
 
 import com.obratrack.model.Usuario;
-import com.obratrack.service.UsuarioService;
+import com.obratrack.service.IUsuarioService;
+import com.obratrack.service.ServiceFactory;
 import com.obratrack.ui.Icons;
 import com.obratrack.ui.Theme;
 
@@ -16,7 +17,7 @@ import java.util.List;
 /** Gestion de usuarios (solo ADMIN): crear, editar, activar/desactivar y resetear contrasena. */
 public class UsuariosView extends JPanel {
 
-    private final UsuarioService usuarioService = new UsuarioService();
+    private final IUsuarioService usuarioService = ServiceFactory.usuario();
 
     private final JTextField campoUsername = new JTextField();
     private final JTextField campoNombre = new JTextField();
@@ -70,6 +71,7 @@ public class UsuariosView extends JPanel {
         comboRol.setFont(Theme.FONT_BASE);
         comboRol.setMaximumSize(new Dimension(Integer.MAX_VALUE, 32));
         comboRol.setAlignmentX(Component.LEFT_ALIGNMENT);
+        comboRol.setRenderer(rendererDeRol());
         panel.add(comboRol);
         panel.add(Box.createVerticalStrut(10));
 
@@ -175,6 +177,7 @@ public class UsuariosView extends JPanel {
         JTextField nombre = new JTextField(u.getNombre() != null ? u.getNombre() : "");
         JComboBox<Usuario.Rol> rol = new JComboBox<>(Usuario.Rol.values());
         rol.setSelectedItem(u.getRol());
+        rol.setRenderer(rendererDeRol());
         JCheckBox activo = new JCheckBox("Usuario activo", u.isActivo());
 
         JPanel form = new JPanel(new GridLayout(0, 1, 0, 4));
@@ -265,7 +268,7 @@ public class UsuariosView extends JPanel {
                 tablaModelo.addRow(new Object[]{
                         u.getUsername(),
                         u.getNombre() != null ? u.getNombre() : "",
-                        u.getRol(),
+                        u.getRol().etiqueta(),
                         u.isActivo() ? "Si" : "No"
                 });
             }
@@ -298,6 +301,18 @@ public class UsuariosView extends JPanel {
         campo.setFont(Theme.FONT_BASE);
         campo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 32));
         campo.setAlignmentX(Component.LEFT_ALIGNMENT);
+    }
+
+    /** Muestra la etiqueta legible del rol (no el nombre crudo del enum) en los combos. */
+    private DefaultListCellRenderer rendererDeRol() {
+        return new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                            boolean isSelected, boolean cellHasFocus) {
+                Object mostrar = (value instanceof Usuario.Rol r) ? r.etiqueta() : value;
+                return super.getListCellRendererComponent(list, mostrar, index, isSelected, cellHasFocus);
+            }
+        };
     }
 
     private void estilizarSec(JButton btn) {

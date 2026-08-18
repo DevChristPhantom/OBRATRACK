@@ -1,12 +1,19 @@
 package com.obratrack.ui.views;
 
+import com.obratrack.model.Actividad;
+import com.obratrack.model.ItemCumplimiento;
 import com.obratrack.model.Obra;
 import com.obratrack.model.Partida;
 import com.obratrack.model.ResumenPeriodo;
+import com.obratrack.service.CronogramaCalculo;
+import com.obratrack.service.CronogramaService;
+import com.obratrack.service.CumplimientoCalculo;
+import com.obratrack.service.CumplimientoService;
 import com.obratrack.service.Granularidad;
+import com.obratrack.service.IMovimientoService;
+import com.obratrack.service.IPartidaService;
 import com.obratrack.service.IndicadorSalud;
-import com.obratrack.service.MovimientoService;
-import com.obratrack.service.PartidaService;
+import com.obratrack.service.ServiceFactory;
 import com.obratrack.ui.Icons;
 import com.obratrack.ui.Theme;
 
@@ -16,6 +23,8 @@ import java.awt.*;
 import java.awt.geom.Arc2D;
 import java.awt.geom.Ellipse2D;
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,9 +39,12 @@ import java.util.function.Supplier;
  */
 public class DashboardView extends JPanel {
 
-    private final PartidaService partidaService = new PartidaService();
-    private final MovimientoService movimientoService = new MovimientoService();
+    private final IPartidaService partidaService = ServiceFactory.partida();
+    private final IMovimientoService movimientoService = ServiceFactory.movimiento();
+    private final CronogramaService cronogramaService = new CronogramaService();
+    private final CumplimientoService cumplimientoService = new CumplimientoService();
     private final Supplier<Obra> obraActivaProvider;
+    private static final DateTimeFormatter FMT_ALERTA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final JLabel tituloObra = new JLabel();
     private final JPanel kpiContainer = new JPanel(new GridLayout(1, 4, 16, 0));
@@ -293,6 +305,17 @@ public class DashboardView extends JPanel {
         for (ResumenPeriodo rp : periodos) d.acumulados.add(rp.getAcumulado());
 
         d.salud = IndicadorSalud.evaluar(obra, d.partidas, d.ejecutadoPorPartida, d.ejecutado);
+
+        LocalDate hoy = LocalDate.now();
+        d.actividadesAtrasadas = cronogramaService.listarPorObra(obra.getId()).stream()
+                .filter(a -> CronogramaCalculo.estado(a, hoy) == CronogramaCalculo.Estado.ATRASADA)
+                .toList();
+        d.itemsVencidos = new ArrayList<>();
+        for (ItemCumplimiento.Categoria categoria : ItemCumplimiento.Categoria.values()) {
+            for (ItemCumplimiento item : cumplimientoService.listarPorObra(obra.getId(), categoria)) {
+                if (CumplimientoCalculo.estaVencido(item, hoy)) d.itemsVencidos.add(item);
+            }
+        }
         return d;
     }
 
@@ -311,7 +334,7 @@ public class DashboardView extends JPanel {
         actualizarBanner(d.salud);
 
         alertasPanel.removeAll();
-        construirAlertas(d.partidas, d.ejecutadoPorPartida);
+        construirAlertas(d.partidas, d.ejecutadoPorPartida, d.actividadesAtrasadas, d.itemsVencidos);
         repintar();
     }
 
@@ -371,7 +394,8 @@ public class DashboardView extends JPanel {
         return resultado;
     }
 
-    private void construirAlertas(List<Partida> partidas, Map<Long, Double> ejecutadoPorPartida) {
+    private void construirAlertas(List<Partida> partidas, Map<Long, Double> ejecutadoPorPartida,
+                                   List<Actividad> actividadesAtrasadas, List<ItemCumplimiento> itemsVencidos) {
         boolean hayAlertas = false;
         for (Partida p : partidas) {
             if (p.isEsPadre() || p.getCostoTotalPresupuestado() <= 0) continue;
@@ -383,8 +407,22 @@ public class DashboardView extends JPanel {
                 alertasPanel.add(Box.createVerticalStrut(8));
             }
         }
+        for (Actividad a : actividadesAtrasadas) {
+            hayAlertas = true;
+            String texto = "CRONOGRAMA   " + (a.getCodigo() != null && !a.getCodigo().isBlank() ? a.getCodigo() + " " : "")
+                    + a.getDescripcion() + " esta atrasada";
+            alertasPanel.add(crearAlertaSimple(texto, "Atrasada", Theme.DANGER));
+            alertasPanel.add(Box.createVerticalStrut(8));
+        }
+        for (ItemCumplimiento i : itemsVencidos) {
+            hayAlertas = true;
+            String vencio = i.getFechaLimite() != null ? i.getFechaLimite().format(FMT_ALERTA) : "";
+            String texto = "CUMPLIMIENTO   " + i.getDescripcion();
+            alertasPanel.add(crearAlertaSimple(texto, "Vencio " + vencio, Theme.DANGER));
+            alertasPanel.add(Box.createVerticalStrut(8));
+        }
         if (!hayAlertas) {
-            JLabel sinAlertas = new JLabel("Sin alertas de presupuesto. Todo va segun lo planificado.");
+            JLabel sinAlertas = new JLabel("Sin alertas de presupuesto, cronograma ni cumplimiento. Todo va segun lo planificado.");
             sinAlertas.setFont(Theme.FONT_BASE);
             sinAlertas.setForeground(Theme.SUCCESS);
             sinAlertas.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -425,6 +463,30 @@ public class DashboardView extends JPanel {
         return alerta;
     }
 
+    /** Alerta generica (cronograma/cumplimiento): mismo formato visual que las de presupuesto. */
+    private JPanel crearAlertaSimple(String texto, String etiquetaDerecha, Color color) {
+        JPanel alerta = new JPanel(new BorderLayout(10, 0));
+        alerta.setBackground(Theme.BG_SECONDARY);
+        alerta.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 4, 0, 0, color),
+                new EmptyBorder(10, 12, 10, 12)
+        ));
+        alerta.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
+        alerta.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel textoLabel = new JLabel(texto);
+        textoLabel.setFont(Theme.FONT_BASE);
+        textoLabel.setForeground(Theme.TEXT_PRIMARY);
+        alerta.add(textoLabel, BorderLayout.CENTER);
+
+        JLabel etiquetaLabel = new JLabel(etiquetaDerecha);
+        etiquetaLabel.setFont(Theme.FONT_BOLD);
+        etiquetaLabel.setForeground(color);
+        alerta.add(etiquetaLabel, BorderLayout.EAST);
+
+        return alerta;
+    }
+
     // ============================================================
     //  Modelo interno de grupo
     // ============================================================
@@ -450,6 +512,8 @@ public class DashboardView extends JPanel {
         List<Grupo> grupos = List.of();
         List<Double> acumulados = List.of();
         IndicadorSalud.Salud salud;
+        List<Actividad> actividadesAtrasadas = List.of();
+        List<ItemCumplimiento> itemsVencidos = List.of();
     }
 
     // ============================================================

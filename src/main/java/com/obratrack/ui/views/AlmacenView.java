@@ -4,8 +4,10 @@ import com.obratrack.model.MovimientoAlmacen;
 import com.obratrack.model.MovimientoAuditoria;
 import com.obratrack.model.Obra;
 import com.obratrack.model.Partida;
-import com.obratrack.service.MovimientoService;
-import com.obratrack.service.PartidaService;
+import com.obratrack.service.IMovimientoService;
+import com.obratrack.service.IPartidaService;
+import com.obratrack.service.Permisos;
+import com.obratrack.service.ServiceFactory;
 import com.obratrack.ui.Icons;
 import com.obratrack.ui.Theme;
 
@@ -24,8 +26,8 @@ import java.util.function.Supplier;
 /** Pantalla mas usada en campo: registrar, editar y eliminar ingreso/egreso de material contra una partida. */
 public class AlmacenView extends JPanel {
 
-    private final PartidaService partidaService = new PartidaService();
-    private final MovimientoService movimientoService = new MovimientoService();
+    private final IPartidaService partidaService = ServiceFactory.partida();
+    private final IMovimientoService movimientoService = ServiceFactory.movimiento();
     private final Supplier<Obra> obraActivaProvider;
     private final Runnable alRegistrar;
 
@@ -105,6 +107,10 @@ public class AlmacenView extends JPanel {
         estilizarBotonSecundario(btnEliminar);
         btnEliminar.setForeground(Theme.DANGER);
         btnEliminar.addActionListener(e -> eliminarSeleccionado());
+        if (!Permisos.puedeEscribir()) {
+            btnEditar.setEnabled(false);
+            btnEliminar.setEnabled(false);
+        }
 
         JButton btnHistorial = new JButton("Historial de cambios", Icons.get("reportes", 15, Theme.PRIMARY));
         btnHistorial.setIconTextGap(6);
@@ -212,6 +218,7 @@ public class AlmacenView extends JPanel {
         btnGuardar.setFocusPainted(false);
         btnGuardar.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btnGuardar.addActionListener(e -> guardar());
+        btnGuardar.setEnabled(Permisos.puedeEscribir());
         botones.add(btnCancelar);
         botones.add(btnGuardar);
         panel.add(botones);

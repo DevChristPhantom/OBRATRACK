@@ -45,6 +45,12 @@ public final class Rutas {
     public static Path logs()    { return sub("logs"); }
     public static Path exports() { return sub("exports"); }
     public static Path backups() { return sub("data", "backups"); }
+    public static Path documentos() { return sub("data", "documentos"); }
+    /** Archivos descargados temporalmente del host cuando esta PC es cliente en red. */
+    public static Path cache()   { return sub("cache"); }
+
+    /** Configuracion de red (modo local/anfitriona/cliente, puerto, host remoto). */
+    public static Path configRed() { return base().resolve("red.properties"); }
 
     private static Path sub(String... partes) {
         Path p = base();

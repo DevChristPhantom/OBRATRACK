@@ -3,9 +3,10 @@ package com.obratrack.ui.views;
 import com.obratrack.model.Obra;
 import com.obratrack.model.ResumenPeriodo;
 import com.obratrack.service.Granularidad;
-import com.obratrack.service.MovimientoService;
-import com.obratrack.service.ReportePdf;
-import com.obratrack.service.ReporteService;
+import com.obratrack.service.IMovimientoService;
+import com.obratrack.service.IReportePdf;
+import com.obratrack.service.IReporteService;
+import com.obratrack.service.ServiceFactory;
 import com.obratrack.ui.Icons;
 import com.obratrack.ui.Theme;
 
@@ -29,9 +30,9 @@ import java.util.function.Supplier;
 public class ComparativoView extends JPanel {
 
     private final Supplier<Obra> obraActivaProvider;
-    private final MovimientoService movimientoService = new MovimientoService();
-    private final ReporteService reporteExcel = new ReporteService();
-    private final ReportePdf reportePdf = new ReportePdf();
+    private final IMovimientoService movimientoService = ServiceFactory.movimiento();
+    private final IReporteService reporteExcel = ServiceFactory.reporteExcel();
+    private final IReportePdf reportePdf = ServiceFactory.reportePdf();
 
     private final JComboBox<Granularidad> comboGranularidad = new JComboBox<>(Granularidad.values());
     private final JLabel tituloObra = new JLabel();

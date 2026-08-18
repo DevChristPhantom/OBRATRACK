@@ -30,13 +30,60 @@ com.obratrack
 ├── service/             Lógica de negocio y acceso a datos (una clase por área):
 │                        ObraService, PartidaService, MovimientoService,
 │                        UsuarioService, ExcelImporter, ReporteService, ReportePdf,
-│                        IndicadorSalud, SesionActual
+│                        IndicadorSalud, SesionActual. Los cuatro servicios centrales
+│                        (Obra/Partida/Movimiento/Usuario) también exponen una interfaz
+│                        `IXxxService` y una implementación `XxxServiceRemoto` (RPC) —
+│                        ver "Modo anfitriona/cliente" abajo.
+├── red/                 Transporte HTTP del modo anfitriona/cliente: ServidorHttp
+│                        (host), RpcCliente, JsonUtil, Escritura (anotación de permisos)
 ├── util/                Utilidades puras (PasswordUtil)
-└── ui/                  Swing: MainWindow, LoginView, Theme, Icons y views/
+└── ui/                  Swing: MainWindow, LoginView, Theme, Icons, ModoInicioView y views/
 ```
 
-Regla de dependencias: **ui → service → core/model**. La capa `model` no depende de nada;
-`service` no conoce Swing; la UI no arma SQL. Esto permite testear la lógica sin interfaz.
+Regla de dependencias: **ui → service → core/model**, con `red` como infraestructura
+paralela a `core` (`red → service/core`, ninguno de los dos depende de `red` ni de `ui`).
+La capa `model` no depende de nada; `service` no conoce Swing; la UI no arma SQL. Esto
+permite testear la lógica sin interfaz.
+
+## Modo anfitriona/cliente (red local)
+
+Cada obra puede operar en tres modos, elegidos en el primer arranque (`ModoInicioView`,
+antes de tocar SQLite) y persistidos en `red.properties`:
+
+- **Local** — el comportamiento de siempre, una PC con su propio archivo SQLite.
+- **Anfitriona** — además de lo anterior, expone los servicios por HTTP (`ServidorHttp`,
+  JDK `com.sun.net.httpserver`) en la red local para que otras PC de la obra se conecten.
+- **Cliente** — no toca SQLite en absoluto (`Database.get()` se niega explícitamente si
+  `RedEstado.modo() == CLIENTE`); todas las llamadas van por RPC (`RpcCliente`, JDK
+  `java.net.http.HttpClient`) hacia la PC anfitriona.
+
+El transporte es un único endpoint `POST /rpc` que despacha por reflexión hacia la clase
+local real del servicio (usando el `Type` genérico de la interfaz `IXxxService` para
+(de)serializar con Gson) — así ningún servicio existente cambia una línea de SQL. La
+identidad del usuario remoto se "presta" a `SesionActual` solo durante cada request,
+dentro de `Database.LOCK`. La anotación `@Escritura` en la interfaz marca qué métodos
+mutan datos, para que el host exija `Permisos.puedeEscribir()` antes de ejecutarlos.
+
+Los 13 servicios de datos ya funcionan en red (Usuario, Obra, Partida, Movimiento,
+Cronograma, Cuaderno, Cumplimiento, Valorización, Metrado, APU, Fórmula Polinómica,
+Documento y los dos generadores de reportes). Dos casos no encajan en el RPC genérico
+porque mueven archivos, no JSON, y usan un transporte paralelo:
+
+- **Documentos** (`IDocumentoService`): `subir` envía el archivo por streaming a
+  `POST /archivos/subir` (metadatos por query string, cuerpo = bytes crudos);
+  `archivoAbsoluto` descarga el archivo guardado en el host vía `POST /rpc-archivo`
+  a una copia local en `Rutas.cache()`. El resto de sus métodos (`listarPorObra`,
+  `listarVersiones`, `eliminar`) sí son RPC normales.
+- **Reportes** (`IReporteService`/`IReportePdf`): generan el Excel/PDF en el host
+  (reutilizando `PartidaService`/`MovimientoService` ya convertidos) y lo descargan
+  también por `POST /rpc-archivo` a `Rutas.cache()`, sobrescribiendo la copia anterior
+  en cada exportación (es una copia de trabajo, no un historial).
+
+`POST /rpc-archivo` es como `/rpc` (mismo despacho por reflexión y mismo `registro`,
+aunque en un mapa aparte `registroArchivos`) salvo que el método invocado debe devolver
+un `Path`: el host transmite el CONTENIDO de ese archivo como respuesta binaria en vez
+de intentar serializar el `Path` a JSON (no tendría sentido fuera de la máquina que lo
+generó). Ningún caso quedó sin convertir.
 
 ## Patrones y decisiones
 

@@ -2,8 +2,9 @@ package com.obratrack.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import com.obratrack.model.Usuario;
+import com.obratrack.service.IUsuarioService;
+import com.obratrack.service.ServiceFactory;
 import com.obratrack.service.SesionActual;
-import com.obratrack.service.UsuarioService;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -30,7 +31,7 @@ public class LoginView extends JFrame {
     private static final Color CLARO_TXT = new Color(0xd6, 0xdd, 0xea);
     private static final String ESTILO_CAMPO = "arc:14;borderColor:#d8dde6;focusedBorderColor:#3b82f6";
 
-    private final UsuarioService usuarioService = new UsuarioService();
+    private final IUsuarioService usuarioService = ServiceFactory.usuario();
     private final Runnable alIngresar;
     private final Preferences prefs = Preferences.userNodeForPackage(LoginView.class);
 

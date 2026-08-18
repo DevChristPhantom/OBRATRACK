@@ -6,7 +6,28 @@ package com.obratrack.model;
  */
 public class Usuario {
 
-    public enum Rol { ADMIN, JEFE_OBRA, ALMACENERO }
+    /**
+     * Roles de campo. ADMIN, JEFE_OBRA y ALMACENERO son los originales (no se
+     * renombran para no invalidar usuarios ya creados); RESIDENTE, SUPERVISOR,
+     * OFICINA_TECNICA y GERENCIA son los roles ampliados para obra grande.
+     * GERENCIA es de solo lectura (ver {@link com.obratrack.service.Permisos#puedeEscribir()}).
+     */
+    public enum Rol {
+        ADMIN, JEFE_OBRA, RESIDENTE, SUPERVISOR, OFICINA_TECNICA, ALMACENERO, GERENCIA;
+
+        /** Nombre legible para mostrar en la interfaz. */
+        public String etiqueta() {
+            return switch (this) {
+                case ADMIN -> "Administrador";
+                case JEFE_OBRA -> "Jefe de obra";
+                case RESIDENTE -> "Residente de obra";
+                case SUPERVISOR -> "Supervisor";
+                case OFICINA_TECNICA -> "Oficina tecnica";
+                case ALMACENERO -> "Almacenero";
+                case GERENCIA -> "Gerencia (solo lectura)";
+            };
+        }
+    }
 
     private Long id;
     private String username;

@@ -39,4 +39,29 @@
         <Bug pattern="DM_EXIT" />
     </Match>
 
+    <!--
+        PartidaDetalleDialog edita la Partida seleccionada "en vivo": necesita la misma
+        instancia que ya tiene la vista (no una copia) para que codigo/costo unitario
+        mostrados en la cabecera sigan siendo la fuente de verdad mientras el dialogo
+        esta abierto. App de escritorio de un solo hilo de UI, sin limite de seguridad
+        que proteger con una copia defensiva.
+    -->
+    <Match>
+        <Class name="com.obratrack.ui.views.PartidaDetalleDialog" />
+        <Bug pattern="EI_EXPOSE_REP2" />
+    </Match>
+
+    <!--
+        AjustesView.tarjetaRed() registra un ActionListener que, SOLO cuando el usuario
+        hace clic en "Cambiar modo...", crea un ModoInicioView. Con effort=Max, SpotBugs
+        sigue esa lambda (metodo privado sintetico de la misma clase) como si formara
+        parte del constructor y marca CT_CONSTRUCTOR_THROW - pero ese codigo no corre
+        durante la construccion, solo al hacer clic, igual que cualquier otro boton de
+        la pantalla (que no se marcan porque no instancian otra ventana).
+    -->
+    <Match>
+        <Class name="com.obratrack.ui.views.AjustesView" />
+        <Bug pattern="CT_CONSTRUCTOR_THROW" />
+    </Match>
+
 </FindBugsFilter>

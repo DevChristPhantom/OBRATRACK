@@ -12,6 +12,11 @@ public class Obra {
         ACTIVA, PAUSADA, FINALIZADA
     }
 
+    /** Modalidad de ejecucion de la obra publica (memoria descriptiva del expediente tecnico). */
+    public enum ModalidadEjecucion {
+        CONTRATA, ADMINISTRACION_DIRECTA, CONCURSO_OFERTA, NUCLEO_EJECUTOR
+    }
+
     private Long id;
     private String nombre;
     private String descripcion;
@@ -21,6 +26,17 @@ public class Obra {
     private Estado estado;
     private String rutaExcelOrigen;
     private LocalDate fechaCreacion;
+
+    // --- Memoria descriptiva: ficha ampliada del expediente tecnico ---
+    private String ubicacion;
+    private String entidadContratante;
+    private ModalidadEjecucion modalidadEjecucion;
+    private String sectoresBloques;
+
+    // --- Presupuesto analitico: porcentajes contractuales sobre el costo directo ---
+    private double pctGastosGenerales;
+    private double pctUtilidad;
+    private double pctIgv = 18.0; // tasa vigente en Peru
 
     public Obra() {
         this.estado = Estado.ACTIVA;
@@ -63,6 +79,27 @@ public class Obra {
 
     public LocalDate getFechaCreacion() { return fechaCreacion; }
     public void setFechaCreacion(LocalDate fechaCreacion) { this.fechaCreacion = fechaCreacion; }
+
+    public String getUbicacion() { return ubicacion; }
+    public void setUbicacion(String ubicacion) { this.ubicacion = ubicacion; }
+
+    public String getEntidadContratante() { return entidadContratante; }
+    public void setEntidadContratante(String entidadContratante) { this.entidadContratante = entidadContratante; }
+
+    public ModalidadEjecucion getModalidadEjecucion() { return modalidadEjecucion; }
+    public void setModalidadEjecucion(ModalidadEjecucion modalidadEjecucion) { this.modalidadEjecucion = modalidadEjecucion; }
+
+    public String getSectoresBloques() { return sectoresBloques; }
+    public void setSectoresBloques(String sectoresBloques) { this.sectoresBloques = sectoresBloques; }
+
+    public double getPctGastosGenerales() { return pctGastosGenerales; }
+    public void setPctGastosGenerales(double pctGastosGenerales) { this.pctGastosGenerales = pctGastosGenerales; }
+
+    public double getPctUtilidad() { return pctUtilidad; }
+    public void setPctUtilidad(double pctUtilidad) { this.pctUtilidad = pctUtilidad; }
+
+    public double getPctIgv() { return pctIgv; }
+    public void setPctIgv(double pctIgv) { this.pctIgv = pctIgv; }
 
     @Override
     public String toString() {

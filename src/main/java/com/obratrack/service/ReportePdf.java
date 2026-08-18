@@ -1,9 +1,12 @@
 package com.obratrack.service;
 
+import com.obratrack.model.Actividad;
+import com.obratrack.model.ItemCumplimiento;
 import com.obratrack.model.MovimientoAlmacen;
 import com.obratrack.model.Obra;
 import com.obratrack.model.Partida;
 import com.obratrack.model.ResumenPeriodo;
+import com.obratrack.model.Valorizacion;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -14,8 +17,10 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -23,7 +28,7 @@ import java.util.Map;
  * Genera reportes en PDF usando PDFBox (Apache 2.0).
  * Dibuja tablas con encabezado repetido y salto de pagina automatico.
  */
-public class ReportePdf {
+public class ReportePdf implements IReportePdf {
 
     private static final String CARPETA_EXPORTS = "exports";
     private static final DateTimeFormatter FMT_ARCHIVO = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
@@ -36,6 +41,9 @@ public class ReportePdf {
 
     private final PartidaService partidaService = new PartidaService();
     private final MovimientoService movimientoService = new MovimientoService();
+    private final CronogramaService cronogramaService = new CronogramaService();
+    private final ValorizacionService valorizacionService = new ValorizacionService();
+    private final CumplimientoService cumplimientoService = new CumplimientoService();
 
     /** Comparativo presupuesto vs ejecutado (PDF, horizontal). */
     public Path exportarComparativoPdf(Obra obra) throws Exception {
@@ -159,6 +167,85 @@ public class ReportePdf {
             lienzo.cerrar();
             return guardar(doc, "periodico_" + granularidad.name().toLowerCase(), obra);
         }
+    }
+
+    /**
+     * Ficha ejecutiva: consolida en una pagina vertical la salud de la obra, el avance
+     * economico, el avance fisico del cronograma, las valorizaciones y el estado de
+     * gestion y cumplimiento (riesgos, ambiental, calidad, SST).
+     */
+    public Path exportarResumenEjecutivoPdf(Obra obra) throws Exception {
+        ResumenEjecutivoCalculo.Resumen r = construirResumenEjecutivo(obra);
+
+        try (PDDocument doc = new PDDocument()) {
+            Lienzo lienzo = new Lienzo(doc, PDRectangle.A4, false); // vertical: es una ficha, no una tabla ancha
+            lienzo.escribirCabecera(obra, "FICHA EJECUTIVA DE OBRA");
+
+            lienzo.dibujarSeccion("Datos generales (memoria descriptiva)");
+            lienzo.dibujarPar("Ubicacion", obra.getUbicacion() != null ? obra.getUbicacion() : "No especificado");
+            lienzo.dibujarPar("Entidad contratante",
+                    obra.getEntidadContratante() != null ? obra.getEntidadContratante() : "No especificado");
+            lienzo.dibujarPar("Modalidad de ejecucion",
+                    obra.getModalidadEjecucion() != null ? obra.getModalidadEjecucion().name() : "No especificado");
+            lienzo.dibujarPar("Sectores / bloques",
+                    obra.getSectoresBloques() != null ? obra.getSectoresBloques() : "No especificado");
+
+            lienzo.dibujarSeccion("Salud de la obra");
+            lienzo.dibujarPar("Nivel", r.salud.titulo);
+            lienzo.dibujarPar("Detalle", r.salud.detalle);
+
+            lienzo.dibujarSeccion("Avance economico");
+            lienzo.dibujarPar("Presupuesto S/.", fmt(r.presupuestoTotal));
+            lienzo.dibujarPar("Ejecutado S/.", fmt(r.ejecutadoTotal));
+            lienzo.dibujarPar("Diferencia S/.", fmt(r.presupuestoTotal - r.ejecutadoTotal));
+            lienzo.dibujarPar("% Avance economico", String.format("%.1f%%", r.pctAvanceEconomico));
+
+            lienzo.dibujarSeccion("Avance fisico (cronograma)");
+            lienzo.dibujarPar("Actividades registradas", String.valueOf(r.actividadesTotal));
+            lienzo.dibujarPar("Completadas", String.valueOf(r.actividadesCompletadas));
+            lienzo.dibujarPar("Atrasadas", String.valueOf(r.actividadesAtrasadas));
+            lienzo.dibujarPar("% Avance real", String.format("%.1f%%", r.pctAvanceFisicoReal));
+            lienzo.dibujarPar("% Avance programado", String.format("%.1f%%", r.pctAvanceFisicoProgramado));
+
+            lienzo.dibujarSeccion("Valorizaciones");
+            lienzo.dibujarPar("Valorizaciones emitidas", String.valueOf(r.numeroValorizaciones));
+            if (r.ultimaValorizacion != null) {
+                lienzo.dibujarPar("Ultima valorizacion", "N°" + r.ultimaValorizacion.getNumero() + " ("
+                        + r.ultimaValorizacion.getPeriodoDesde() + " a " + r.ultimaValorizacion.getPeriodoHasta() + ")");
+                lienzo.dibujarPar("Monto neto ultima valorizacion S/.", fmt(r.ultimaValorizacion.getMontoNetoPagar()));
+            }
+            lienzo.dibujarPar("Total valorizado acumulado S/.", fmt(r.totalValorizadoAcumulado));
+
+            lienzo.dibujarSeccion("Gestion y cumplimiento");
+            String[] cols = {"Categoria", "Total", "Abiertos", "Vencidos"};
+            float[] anchos = {150, 110, 110, 110};
+            lienzo.dibujarHeaderTabla(cols, anchos);
+            for (ResumenEjecutivoCalculo.ConteoCategoria cc : r.cumplimiento) {
+                String[] valores = {cc.categoria.name(), String.valueOf(cc.total),
+                        String.valueOf(cc.abiertos), String.valueOf(cc.vencidos)};
+                lienzo.dibujarFila(valores, anchos, false, cols);
+            }
+
+            lienzo.cerrar();
+            return guardar(doc, "resumen_ejecutivo", obra);
+        }
+    }
+
+    /** Reune los datos de todas las areas de la obra para {@link ResumenEjecutivoCalculo#construir}. */
+    ResumenEjecutivoCalculo.Resumen construirResumenEjecutivo(Obra obra) throws SQLException {
+        List<Partida> partidas = partidaService.listarPorObra(obra.getId());
+        Map<Long, Double> ejecutadoPorPartida = movimientoService.totalEjecutadoPorPartida(obra.getId());
+        double ejecutadoTotal = movimientoService.totalEjecutadoObra(obra.getId());
+        List<Actividad> actividades = cronogramaService.listarPorObra(obra.getId());
+        List<Valorizacion> valorizaciones = valorizacionService.listarPorObra(obra.getId());
+
+        Map<ItemCumplimiento.Categoria, List<ItemCumplimiento>> itemsPorCategoria = new LinkedHashMap<>();
+        for (ItemCumplimiento.Categoria categoria : ItemCumplimiento.Categoria.values()) {
+            itemsPorCategoria.put(categoria, cumplimientoService.listarPorObra(obra.getId(), categoria));
+        }
+
+        return ResumenEjecutivoCalculo.construir(obra, partidas, ejecutadoPorPartida, ejecutadoTotal,
+                actividades, valorizaciones, itemsPorCategoria, LocalDate.now());
     }
 
     private Path guardar(PDDocument doc, String tipo, Obra obra) throws IOException {
@@ -304,6 +391,28 @@ public class ReportePdf {
                 i--;
             }
             return i <= 0 ? "" : limpio.substring(0, i) + puntos;
+        }
+
+        /** Titulo de seccion con una linea divisoria debajo (para la ficha ejecutiva). */
+        void dibujarSeccion(String titulo) throws IOException {
+            if (y - 30 < MARGEN) nuevaPagina();
+            y -= 6;
+            texto(titulo, MARGEN, y, FUENTE_BOLD, 11);
+            y -= 4;
+            stream.setStrokingColor(180, 180, 180);
+            stream.moveTo(MARGEN, y);
+            stream.lineTo(MARGEN + anchoUtil, y);
+            stream.stroke();
+            y -= 16;
+        }
+
+        /** Fila "etiqueta: valor" de dos columnas (para la ficha ejecutiva). */
+        void dibujarPar(String etiqueta, String valor) throws IOException {
+            if (y - ALTO_FILA < MARGEN) nuevaPagina();
+            float xValor = MARGEN + 200;
+            texto(ajustarAncho(etiqueta, FUENTE_BOLD, TAM_FUENTE, 190), MARGEN, y - 13, FUENTE_BOLD, TAM_FUENTE);
+            texto(ajustarAncho(valor, FUENTE, TAM_FUENTE, anchoUtil - 200), xValor, y - 13, FUENTE, TAM_FUENTE);
+            y -= ALTO_FILA;
         }
 
         void cerrar() throws IOException {

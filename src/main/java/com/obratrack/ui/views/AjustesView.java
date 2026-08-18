@@ -1,11 +1,15 @@
 package com.obratrack.ui.views;
 
 import com.obratrack.core.AppInfo;
+import com.obratrack.core.Modo;
+import com.obratrack.core.RedEstado;
 import com.obratrack.core.RespaldoDB;
 import com.obratrack.core.Rutas;
 import com.obratrack.model.Usuario;
+import com.obratrack.service.IUsuarioService;
+import com.obratrack.service.ServiceFactory;
 import com.obratrack.service.SesionActual;
-import com.obratrack.service.UsuarioService;
+import com.obratrack.ui.ModoInicioView;
 import com.obratrack.ui.Theme;
 
 import javax.swing.*;
@@ -18,7 +22,7 @@ import java.util.Optional;
 /** Pantalla de ajustes: cambiar la propia contrasena, respaldos y carpetas de datos. */
 public class AjustesView extends JPanel {
 
-    private final UsuarioService usuarioService = new UsuarioService();
+    private final IUsuarioService usuarioService = ServiceFactory.usuario();
     private final JLabel mensaje = new JLabel(" ");
 
     public AjustesView() {
@@ -37,6 +41,8 @@ public class AjustesView extends JPanel {
         col.add(tarjetaPassword());
         col.add(Box.createVerticalStrut(14));
         col.add(tarjetaDatos());
+        col.add(Box.createVerticalStrut(14));
+        col.add(tarjetaRed());
         col.add(Box.createVerticalStrut(14));
         col.add(tarjetaInfo());
         col.add(Box.createVerticalStrut(10));
@@ -137,6 +143,34 @@ public class AjustesView extends JPanel {
         botones.add(botonAbrir("Logs", Rutas.logs().toFile()));
         card.add(botones);
         return card;
+    }
+
+    private JPanel tarjetaRed() {
+        JPanel card = tarjeta("Modo de red");
+        JLabel info = new JLabel(descripcionModo());
+        info.setFont(Theme.FONT_SMALL);
+        info.setForeground(Theme.TEXT_SECONDARY);
+        info.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.add(info);
+        card.add(Box.createVerticalStrut(10));
+
+        JButton btn = boton("Cambiar modo...", Theme.BG_CARD);
+        btn.addActionListener(e -> new ModoInicioView(() -> {
+            JOptionPane.showMessageDialog(this,
+                    "Modo guardado. Cierra y vuelve a abrir ObraTrack para que el cambio tome efecto.",
+                    "Reinicia para aplicar el cambio", JOptionPane.INFORMATION_MESSAGE);
+        }).setVisible(true));
+        card.add(btn);
+        return card;
+    }
+
+    private String descripcionModo() {
+        Modo m = RedEstado.modo();
+        return switch (m) {
+            case LOCAL -> "Local — esta PC trabaja sola, sin red.";
+            case ANFITRIONA -> "Anfitriona — sirve los datos de esta obra en el puerto " + RedEstado.puerto() + ".";
+            case CLIENTE -> "Cliente — conectada a " + RedEstado.urlHost();
+        };
     }
 
     private JPanel tarjetaInfo() {

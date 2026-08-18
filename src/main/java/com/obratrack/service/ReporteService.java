@@ -1,9 +1,12 @@
 package com.obratrack.service;
 
+import com.obratrack.model.Actividad;
+import com.obratrack.model.ItemCumplimiento;
 import com.obratrack.model.MovimientoAlmacen;
 import com.obratrack.model.Obra;
 import com.obratrack.model.Partida;
 import com.obratrack.model.ResumenPeriodo;
+import com.obratrack.model.Valorizacion;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -11,8 +14,10 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -23,12 +28,15 @@ import java.util.Map;
  *   - Reporte acumulado: todos los movimientos hasta hoy.
  *   - Comparativo presupuesto vs ejecutado: por partida.
  */
-public class ReporteService {
+public class ReporteService implements IReporteService {
 
     private static final DateTimeFormatter FMT_ARCHIVO = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
     private final PartidaService partidaService = new PartidaService();
     private final MovimientoService movimientoService = new MovimientoService();
+    private final CronogramaService cronogramaService = new CronogramaService();
+    private final ValorizacionService valorizacionService = new ValorizacionService();
+    private final CumplimientoService cumplimientoService = new CumplimientoService();
 
     // ============================================================
     //  EXCEL
@@ -203,6 +211,133 @@ public class ReporteService {
 
             return guardarWorkbook(wb, "periodico_" + granularidad.name().toLowerCase(), obra);
         }
+    }
+
+    /**
+     * Ficha ejecutiva: consolida en una sola hoja la salud de la obra, el avance
+     * economico, el avance fisico del cronograma, las valorizaciones y el estado de
+     * gestion y cumplimiento (riesgos, ambiental, calidad, SST). Pensada para gerencia,
+     * que no necesita el detalle de cada partida sino el panorama general.
+     */
+    public Path exportarResumenEjecutivoExcel(Obra obra) throws Exception {
+        ResumenEjecutivoCalculo.Resumen r = construirResumenEjecutivo(obra);
+
+        try (Workbook wb = new XSSFWorkbook()) {
+            Sheet hoja = wb.createSheet("Resumen Ejecutivo");
+            EstilosExcel estilos = new EstilosExcel(wb);
+
+            int fila = 0;
+            fila = escribirCabeceraObra(hoja, estilos, obra, "FICHA EJECUTIVA DE OBRA", 4, fila);
+
+            fila = escribirSeccion(hoja, estilos, fila, "Datos generales (memoria descriptiva)");
+            fila = escribirPar(hoja, estilos, fila, "Ubicacion",
+                    obra.getUbicacion() != null ? obra.getUbicacion() : "No especificado");
+            fila = escribirPar(hoja, estilos, fila, "Entidad contratante",
+                    obra.getEntidadContratante() != null ? obra.getEntidadContratante() : "No especificado");
+            fila = escribirPar(hoja, estilos, fila, "Modalidad de ejecucion",
+                    obra.getModalidadEjecucion() != null ? obra.getModalidadEjecucion().name() : "No especificado");
+            fila = escribirPar(hoja, estilos, fila, "Sectores / bloques",
+                    obra.getSectoresBloques() != null ? obra.getSectoresBloques() : "No especificado");
+            fila++;
+
+            fila = escribirSeccion(hoja, estilos, fila, "Salud de la obra");
+            fila = escribirPar(hoja, estilos, fila, "Nivel", r.salud.titulo);
+            fila = escribirPar(hoja, estilos, fila, "Detalle", r.salud.detalle);
+            fila++;
+
+            fila = escribirSeccion(hoja, estilos, fila, "Avance economico");
+            fila = escribirParMoneda(hoja, estilos, fila, "Presupuesto S/.", r.presupuestoTotal);
+            fila = escribirParMoneda(hoja, estilos, fila, "Ejecutado S/.", r.ejecutadoTotal);
+            fila = escribirParMoneda(hoja, estilos, fila, "Diferencia S/.", r.presupuestoTotal - r.ejecutadoTotal);
+            fila = escribirParPorcentaje(hoja, estilos, fila, "% Avance economico", r.pctAvanceEconomico);
+            fila++;
+
+            fila = escribirSeccion(hoja, estilos, fila, "Avance fisico (cronograma)");
+            fila = escribirPar(hoja, estilos, fila, "Actividades registradas", String.valueOf(r.actividadesTotal));
+            fila = escribirPar(hoja, estilos, fila, "Completadas", String.valueOf(r.actividadesCompletadas));
+            fila = escribirPar(hoja, estilos, fila, "Atrasadas", String.valueOf(r.actividadesAtrasadas));
+            fila = escribirParPorcentaje(hoja, estilos, fila, "% Avance real", r.pctAvanceFisicoReal);
+            fila = escribirParPorcentaje(hoja, estilos, fila, "% Avance programado", r.pctAvanceFisicoProgramado);
+            fila++;
+
+            fila = escribirSeccion(hoja, estilos, fila, "Valorizaciones");
+            fila = escribirPar(hoja, estilos, fila, "Valorizaciones emitidas", String.valueOf(r.numeroValorizaciones));
+            if (r.ultimaValorizacion != null) {
+                fila = escribirPar(hoja, estilos, fila, "Ultima valorizacion",
+                        "N°" + r.ultimaValorizacion.getNumero() + " (" + r.ultimaValorizacion.getPeriodoDesde()
+                                + " a " + r.ultimaValorizacion.getPeriodoHasta() + ")");
+                fila = escribirParMoneda(hoja, estilos, fila, "Monto neto ultima valorizacion S/.",
+                        r.ultimaValorizacion.getMontoNetoPagar());
+            }
+            fila = escribirParMoneda(hoja, estilos, fila, "Total valorizado acumulado S/.", r.totalValorizadoAcumulado);
+            fila++;
+
+            fila = escribirSeccion(hoja, estilos, fila, "Gestion y cumplimiento");
+            Row header = hoja.createRow(fila++);
+            String[] cols = {"Categoria", "Total", "Abiertos", "Vencidos"};
+            for (int c = 0; c < cols.length; c++) {
+                Cell celda = header.createCell(c);
+                celda.setCellValue(cols[c]);
+                celda.setCellStyle(estilos.header);
+            }
+            for (ResumenEjecutivoCalculo.ConteoCategoria cc : r.cumplimiento) {
+                Row row = hoja.createRow(fila++);
+                crearCeldaTexto(row, 0, cc.categoria.name(), estilos.textoBase(false));
+                crearCeldaNumero(row, 1, cc.total, estilos.numero);
+                crearCeldaNumero(row, 2, cc.abiertos, estilos.numero);
+                crearCeldaNumero(row, 3, cc.vencidos, cc.vencidos > 0 ? estilos.monedaRoja : estilos.numero);
+            }
+
+            for (int c = 0; c < cols.length; c++) hoja.autoSizeColumn(c);
+
+            return guardarWorkbook(wb, "resumen_ejecutivo", obra);
+        }
+    }
+
+    /** Reune los datos de todas las areas de la obra para {@link ResumenEjecutivoCalculo#construir}. */
+    ResumenEjecutivoCalculo.Resumen construirResumenEjecutivo(Obra obra) throws SQLException {
+        List<Partida> partidas = partidaService.listarPorObra(obra.getId());
+        Map<Long, Double> ejecutadoPorPartida = movimientoService.totalEjecutadoPorPartida(obra.getId());
+        double ejecutadoTotal = movimientoService.totalEjecutadoObra(obra.getId());
+        List<Actividad> actividades = cronogramaService.listarPorObra(obra.getId());
+        List<Valorizacion> valorizaciones = valorizacionService.listarPorObra(obra.getId());
+
+        Map<ItemCumplimiento.Categoria, List<ItemCumplimiento>> itemsPorCategoria = new LinkedHashMap<>();
+        for (ItemCumplimiento.Categoria categoria : ItemCumplimiento.Categoria.values()) {
+            itemsPorCategoria.put(categoria, cumplimientoService.listarPorObra(obra.getId(), categoria));
+        }
+
+        return ResumenEjecutivoCalculo.construir(obra, partidas, ejecutadoPorPartida, ejecutadoTotal,
+                actividades, valorizaciones, itemsPorCategoria, LocalDate.now());
+    }
+
+    private int escribirSeccion(Sheet hoja, EstilosExcel estilos, int fila, String titulo) {
+        Row row = hoja.createRow(fila++);
+        Cell c = row.createCell(0);
+        c.setCellValue(titulo);
+        c.setCellStyle(estilos.subtitulo);
+        return fila;
+    }
+
+    private int escribirPar(Sheet hoja, EstilosExcel estilos, int fila, String etiqueta, String valor) {
+        Row row = hoja.createRow(fila++);
+        crearCeldaTexto(row, 0, etiqueta, estilos.textoBase(true));
+        crearCeldaTexto(row, 1, valor, estilos.textoBase(false));
+        return fila;
+    }
+
+    private int escribirParMoneda(Sheet hoja, EstilosExcel estilos, int fila, String etiqueta, double valor) {
+        Row row = hoja.createRow(fila++);
+        crearCeldaTexto(row, 0, etiqueta, estilos.textoBase(true));
+        crearCeldaNumero(row, 1, valor, valor < 0 ? estilos.monedaRoja : estilos.moneda);
+        return fila;
+    }
+
+    private int escribirParPorcentaje(Sheet hoja, EstilosExcel estilos, int fila, String etiqueta, double pct) {
+        Row row = hoja.createRow(fila++);
+        crearCeldaTexto(row, 0, etiqueta, estilos.textoBase(true));
+        crearCeldaNumero(row, 1, pct / 100.0, estilos.porcentajePorAvance(pct));
+        return fila;
     }
 
     private int escribirCabeceraObra(Sheet hoja, EstilosExcel estilos, Obra obra,

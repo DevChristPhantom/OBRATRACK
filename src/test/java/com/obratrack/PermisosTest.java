@@ -47,6 +47,28 @@ class PermisosTest {
         assertFalse(Permisos.puedeGestionarObras());
     }
 
+    @Test
+    void gerenciaEsSoloLectura() {
+        sesionCon(Usuario.Rol.GERENCIA);
+        assertFalse(Permisos.puedeEscribir());
+    }
+
+    @Test
+    void rolesDeCampoPuedenEscribir() {
+        for (Usuario.Rol rol : new Usuario.Rol[]{
+                Usuario.Rol.ADMIN, Usuario.Rol.JEFE_OBRA, Usuario.Rol.RESIDENTE,
+                Usuario.Rol.SUPERVISOR, Usuario.Rol.OFICINA_TECNICA, Usuario.Rol.ALMACENERO}) {
+            sesionCon(rol);
+            assertTrue(Permisos.puedeEscribir(), rol + " deberia poder escribir");
+        }
+    }
+
+    @Test
+    void sinSesionNoPuedeEscribir() {
+        SesionActual.cerrar();
+        assertFalse(Permisos.puedeEscribir());
+    }
+
     @AfterEach
     void limpiar() {
         SesionActual.cerrar();

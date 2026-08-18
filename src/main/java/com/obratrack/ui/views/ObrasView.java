@@ -4,10 +4,11 @@ import com.obratrack.model.Obra;
 import com.obratrack.model.Partida;
 import com.obratrack.service.ExcelImporter;
 import com.obratrack.service.ExcelImporter.HojaImportable;
+import com.obratrack.service.IObraService;
+import com.obratrack.service.IPartidaService;
 import com.obratrack.service.ImportResult;
-import com.obratrack.service.ObraService;
 import com.obratrack.service.Permisos;
-import com.obratrack.service.PartidaService;
+import com.obratrack.service.ServiceFactory;
 import com.obratrack.ui.Icons;
 import com.obratrack.ui.Theme;
 
@@ -25,8 +26,8 @@ import java.util.function.Consumer;
 /** Vista de gestion de obras: crear nueva obra y cargar su Excel de presupuesto. */
 public final class ObrasView extends JPanel {
 
-    private final ObraService obraService = new ObraService();
-    private final PartidaService partidaService = new PartidaService();
+    private final IObraService obraService = ServiceFactory.obra();
+    private final IPartidaService partidaService = ServiceFactory.partida();
     private final ExcelImporter excelImporter = new ExcelImporter();
 
     private final Consumer<Obra> alCrearObra;
@@ -37,6 +38,22 @@ public final class ObrasView extends JPanel {
     private final JTextField campoFechaInicio = new JTextField(LocalDate.now().toString());
     private final JTextField campoFechaFin = new JTextField();
     private final JTextField campoRutaExcel = new JTextField();
+    private final JTextField campoUbicacion = new JTextField();
+    private final JTextField campoEntidad = new JTextField();
+    private final JComboBox<String> campoModalidad = new JComboBox<>(OPCIONES_MODALIDAD);
+    private final JTextArea campoSectores = new JTextArea(3, 20);
+
+    /** Primer elemento = "sin definir" (modalidad opcional); el resto son los valores del enum. */
+    private static final String SIN_DEFINIR = "(sin definir)";
+    private static final String[] OPCIONES_MODALIDAD = construirOpcionesModalidad();
+
+    private static String[] construirOpcionesModalidad() {
+        Obra.ModalidadEjecucion[] valores = Obra.ModalidadEjecucion.values();
+        String[] opciones = new String[valores.length + 1];
+        opciones[0] = SIN_DEFINIR;
+        for (int i = 0; i < valores.length; i++) opciones[i + 1] = valores[i].name();
+        return opciones;
+    }
     private final List<Obra> obrasActuales = new ArrayList<>();
     private JTable tabla;
     private DefaultTableModel tablaModelo;
@@ -108,6 +125,34 @@ public final class ObrasView extends JPanel {
         filaFechas.add(colInicio);
         filaFechas.add(colFin);
         panel.add(filaFechas);
+        panel.add(Box.createVerticalStrut(10));
+
+        panel.add(seccionTitulo("Memoria descriptiva"));
+        panel.add(Box.createVerticalStrut(8));
+
+        panel.add(etiqueta("Ubicacion (distrito, provincia, departamento)"));
+        estilizar(campoUbicacion);
+        panel.add(campoUbicacion);
+        panel.add(Box.createVerticalStrut(10));
+
+        panel.add(etiqueta("Entidad contratante"));
+        estilizar(campoEntidad);
+        panel.add(campoEntidad);
+        panel.add(Box.createVerticalStrut(10));
+
+        panel.add(etiqueta("Modalidad de ejecucion"));
+        campoModalidad.setAlignmentX(Component.LEFT_ALIGNMENT);
+        campoModalidad.setMaximumSize(new Dimension(Integer.MAX_VALUE, 32));
+        panel.add(campoModalidad);
+        panel.add(Box.createVerticalStrut(10));
+
+        panel.add(etiqueta("Sectores / bloques"));
+        campoSectores.setLineWrap(true);
+        campoSectores.setWrapStyleWord(true);
+        campoSectores.setFont(Theme.FONT_BASE);
+        JScrollPane scrollSectores = new JScrollPane(campoSectores);
+        scrollSectores.setMaximumSize(new Dimension(Integer.MAX_VALUE, 80));
+        panel.add(scrollSectores);
         panel.add(Box.createVerticalStrut(10));
 
         panel.add(etiqueta("Excel de presupuesto (.xlsx / .xls)"));
@@ -240,6 +285,10 @@ public final class ObrasView extends JPanel {
         try {
             Obra obra = new Obra(nombre, campoDescripcion.getText().trim(), fechaInicio, fechaFin);
             obra.setRutaExcelOrigen(rutaExcel.isEmpty() ? null : rutaExcel);
+            obra.setUbicacion(vacioComoNull(campoUbicacion.getText()));
+            obra.setEntidadContratante(vacioComoNull(campoEntidad.getText()));
+            obra.setModalidadEjecucion(modalidadSeleccionada(campoModalidad));
+            obra.setSectoresBloques(vacioComoNull(campoSectores.getText()));
             obraService.crear(obra);
 
             if (importResult != null) {
@@ -388,6 +437,13 @@ public final class ObrasView extends JPanel {
         JTextField fin = new JTextField(o.getFechaFinEstimada() != null ? o.getFechaFinEstimada().toString() : "");
         JComboBox<Obra.Estado> estado = new JComboBox<>(Obra.Estado.values());
         estado.setSelectedItem(o.getEstado());
+        JTextField ubicacion = new JTextField(o.getUbicacion() != null ? o.getUbicacion() : "");
+        JTextField entidad = new JTextField(o.getEntidadContratante() != null ? o.getEntidadContratante() : "");
+        JComboBox<String> modalidad = new JComboBox<>(OPCIONES_MODALIDAD);
+        modalidad.setSelectedItem(o.getModalidadEjecucion() != null ? o.getModalidadEjecucion().name() : SIN_DEFINIR);
+        JTextArea sectores = new JTextArea(o.getSectoresBloques() != null ? o.getSectoresBloques() : "", 3, 20);
+        sectores.setLineWrap(true);
+        sectores.setWrapStyleWord(true);
 
         JPanel form = new JPanel(new GridLayout(0, 1, 0, 4));
         form.add(new JLabel("Nombre *"));
@@ -400,6 +456,14 @@ public final class ObrasView extends JPanel {
         form.add(fin);
         form.add(new JLabel("Estado"));
         form.add(estado);
+        form.add(new JLabel("Ubicacion (distrito, provincia, departamento)"));
+        form.add(ubicacion);
+        form.add(new JLabel("Entidad contratante"));
+        form.add(entidad);
+        form.add(new JLabel("Modalidad de ejecucion"));
+        form.add(modalidad);
+        form.add(new JLabel("Sectores / bloques"));
+        form.add(new JScrollPane(sectores));
 
         int op = JOptionPane.showConfirmDialog(this, form, "Editar obra",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
@@ -430,6 +494,10 @@ public final class ObrasView extends JPanel {
         o.setFechaInicio(fi);
         o.setFechaFinEstimada(ff);
         o.setEstado((Obra.Estado) estado.getSelectedItem());
+        o.setUbicacion(vacioComoNull(ubicacion.getText()));
+        o.setEntidadContratante(vacioComoNull(entidad.getText()));
+        o.setModalidadEjecucion(modalidadSeleccionada(modalidad));
+        o.setSectoresBloques(vacioComoNull(sectores.getText()));
         try {
             obraService.actualizar(o);
             cargarListado();
@@ -447,6 +515,21 @@ public final class ObrasView extends JPanel {
         campoFechaInicio.setText(LocalDate.now().toString());
         campoFechaFin.setText("");
         campoRutaExcel.setText("");
+        campoUbicacion.setText("");
+        campoEntidad.setText("");
+        campoModalidad.setSelectedIndex(0);
+        campoSectores.setText("");
+    }
+
+    private String vacioComoNull(String texto) {
+        String t = texto == null ? "" : texto.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    private Obra.ModalidadEjecucion modalidadSeleccionada(JComboBox<String> combo) {
+        String seleccion = (String) combo.getSelectedItem();
+        if (seleccion == null || SIN_DEFINIR.equals(seleccion)) return null;
+        return Obra.ModalidadEjecucion.valueOf(seleccion);
     }
 
     /** Parsea una fecha AAAA-MM-DD; devuelve porDefecto si el texto esta vacio, o null si es invalida. */

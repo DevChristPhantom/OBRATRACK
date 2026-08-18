@@ -1,8 +1,9 @@
 package com.obratrack.ui.views;
 
 import com.obratrack.model.Obra;
-import com.obratrack.service.ReportePdf;
-import com.obratrack.service.ReporteService;
+import com.obratrack.service.IReportePdf;
+import com.obratrack.service.IReporteService;
+import com.obratrack.service.ServiceFactory;
 import com.obratrack.ui.Icons;
 import com.obratrack.ui.Theme;
 
@@ -19,8 +20,8 @@ import java.util.function.Supplier;
 public class ReportesView extends JPanel {
 
     private final Supplier<Obra> obraActivaProvider;
-    private final ReporteService reporteExcel = new ReporteService();
-    private final ReportePdf reportePdf = new ReportePdf();
+    private final IReporteService reporteExcel = ServiceFactory.reporteExcel();
+    private final IReportePdf reportePdf = ServiceFactory.reportePdf();
 
     private final JLabel tituloObra = new JLabel();
     private final JTextField campoFechaDiario = new JTextField(LocalDate.now().toString());
@@ -46,6 +47,14 @@ public class ReportesView extends JPanel {
         JPanel centro = new JPanel();
         centro.setLayout(new BoxLayout(centro, BoxLayout.Y_AXIS));
         centro.setOpaque(false);
+
+        centro.add(tarjetaReporte(
+                "Ficha Ejecutiva (Resumen Gerencial)",
+                "Panorama de una pagina para gerencia: salud de la obra, avance economico y fisico, "
+                        + "valorizaciones y estado de gestion y cumplimiento.",
+                () -> generar("resumen_ejecutivo", null, false),
+                () -> generar("resumen_ejecutivo", null, true)));
+        centro.add(Box.createVerticalStrut(14));
 
         centro.add(tarjetaReporte(
                 "Comparativo: Presupuesto vs Ejecutado",
@@ -191,12 +200,14 @@ public class ReportesView extends JPanel {
                 ruta = switch (tipo) {
                     case "comparativo" -> reportePdf.exportarComparativoPdf(obra);
                     case "diario" -> reportePdf.exportarMovimientosPdf(obra, fecha);
+                    case "resumen_ejecutivo" -> reportePdf.exportarResumenEjecutivoPdf(obra);
                     default -> reportePdf.exportarMovimientosPdf(obra, null);
                 };
             } else {
                 ruta = switch (tipo) {
                     case "comparativo" -> reporteExcel.exportarComparativoExcel(obra);
                     case "diario" -> reporteExcel.exportarMovimientosExcel(obra, fecha);
+                    case "resumen_ejecutivo" -> reporteExcel.exportarResumenEjecutivoExcel(obra);
                     default -> reporteExcel.exportarMovimientosExcel(obra, null);
                 };
             }

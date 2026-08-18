@@ -1,6 +1,8 @@
 package com.obratrack.ui;
 
 import com.obratrack.model.Usuario;
+import com.obratrack.service.IUsuarioService;
+import com.obratrack.service.ServiceFactory;
 import com.obratrack.service.UsuarioService;
 
 import javax.swing.*;
@@ -22,7 +24,7 @@ public final class CambioPasswordObligatorio {
     private CambioPasswordObligatorio() {}
 
     public static boolean mostrar(Usuario u) {
-        UsuarioService service = new UsuarioService();
+        IUsuarioService service = ServiceFactory.usuario();
 
         while (true) {
             JPasswordField nueva = campo();

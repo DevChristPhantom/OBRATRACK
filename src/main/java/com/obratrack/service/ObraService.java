@@ -13,13 +13,15 @@ import java.util.List;
  * Todo acceso a la base se serializa bajo {@link Database#LOCK}; el borrado se hace
  * de forma atomica (auditoria + obra) con {@link Database#enTransaccion}.
  */
-public class ObraService {
+public class ObraService implements IObraService {
 
     public Obra crear(Obra obra) throws SQLException {
         String sql = """
             INSERT INTO obra (nombre, descripcion, fecha_inicio, fecha_fin_estimada,
-                               presupuesto_total, estado, ruta_excel_origen, fecha_creacion)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                               presupuesto_total, estado, ruta_excel_origen, fecha_creacion,
+                               ubicacion, entidad_contratante, modalidad_ejecucion, sectores_bloques,
+                               pct_gastos_generales, pct_utilidad, pct_igv)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """;
         synchronized (Database.LOCK) {
             try (PreparedStatement ps = Database.get().prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
@@ -31,6 +33,13 @@ public class ObraService {
                 ps.setString(6, obra.getEstado().name());
                 ps.setString(7, obra.getRutaExcelOrigen());
                 ps.setString(8, str(obra.getFechaCreacion() != null ? obra.getFechaCreacion() : LocalDate.now()));
+                ps.setString(9, obra.getUbicacion());
+                ps.setString(10, obra.getEntidadContratante());
+                ps.setString(11, obra.getModalidadEjecucion() != null ? obra.getModalidadEjecucion().name() : null);
+                ps.setString(12, obra.getSectoresBloques());
+                ps.setDouble(13, obra.getPctGastosGenerales());
+                ps.setDouble(14, obra.getPctUtilidad());
+                ps.setDouble(15, obra.getPctIgv());
                 ps.executeUpdate();
                 try (ResultSet rs = ps.getGeneratedKeys()) {
                     if (rs.next()) obra.setId(rs.getLong(1));
@@ -111,7 +120,9 @@ public class ObraService {
         }
         String sql = """
             UPDATE obra
-            SET nombre = ?, descripcion = ?, fecha_inicio = ?, fecha_fin_estimada = ?, estado = ?
+            SET nombre = ?, descripcion = ?, fecha_inicio = ?, fecha_fin_estimada = ?, estado = ?,
+                ubicacion = ?, entidad_contratante = ?, modalidad_ejecucion = ?, sectores_bloques = ?,
+                pct_gastos_generales = ?, pct_utilidad = ?, pct_igv = ?
             WHERE id = ?
         """;
         synchronized (Database.LOCK) {
@@ -121,7 +132,14 @@ public class ObraService {
                 ps.setString(3, str(obra.getFechaInicio()));
                 ps.setString(4, str(obra.getFechaFinEstimada()));
                 ps.setString(5, obra.getEstado().name());
-                ps.setLong(6, obra.getId());
+                ps.setString(6, obra.getUbicacion());
+                ps.setString(7, obra.getEntidadContratante());
+                ps.setString(8, obra.getModalidadEjecucion() != null ? obra.getModalidadEjecucion().name() : null);
+                ps.setString(9, obra.getSectoresBloques());
+                ps.setDouble(10, obra.getPctGastosGenerales());
+                ps.setDouble(11, obra.getPctUtilidad());
+                ps.setDouble(12, obra.getPctIgv());
+                ps.setLong(13, obra.getId());
                 ps.executeUpdate();
             }
         }
@@ -157,6 +175,14 @@ public class ObraService {
         o.setEstado(Obra.Estado.valueOf(rs.getString("estado")));
         o.setRutaExcelOrigen(rs.getString("ruta_excel_origen"));
         o.setFechaCreacion(parseDate(rs.getString("fecha_creacion")));
+        o.setUbicacion(rs.getString("ubicacion"));
+        o.setEntidadContratante(rs.getString("entidad_contratante"));
+        String modalidad = rs.getString("modalidad_ejecucion");
+        o.setModalidadEjecucion(modalidad != null ? Obra.ModalidadEjecucion.valueOf(modalidad) : null);
+        o.setSectoresBloques(rs.getString("sectores_bloques"));
+        o.setPctGastosGenerales(rs.getDouble("pct_gastos_generales"));
+        o.setPctUtilidad(rs.getDouble("pct_utilidad"));
+        o.setPctIgv(rs.getDouble("pct_igv"));
         return o;
     }
 

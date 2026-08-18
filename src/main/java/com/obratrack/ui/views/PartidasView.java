@@ -2,8 +2,9 @@ package com.obratrack.ui.views;
 
 import com.obratrack.model.Obra;
 import com.obratrack.model.Partida;
-import com.obratrack.service.MovimientoService;
-import com.obratrack.service.PartidaService;
+import com.obratrack.service.IMovimientoService;
+import com.obratrack.service.IPartidaService;
+import com.obratrack.service.ServiceFactory;
 import com.obratrack.ui.Theme;
 
 import javax.swing.*;
@@ -19,8 +20,8 @@ import java.util.function.Supplier;
 /** Tabla de partidas de la obra activa: presupuestado vs ejecutado, con color segun avance. */
 public class PartidasView extends JPanel {
 
-    private final PartidaService partidaService = new PartidaService();
-    private final MovimientoService movimientoService = new MovimientoService();
+    private final IPartidaService partidaService = ServiceFactory.partida();
+    private final IMovimientoService movimientoService = ServiceFactory.movimiento();
     private final Supplier<Obra> obraActivaProvider;
 
     private final JLabel tituloObra = new JLabel();
@@ -30,6 +31,7 @@ public class PartidasView extends JPanel {
     /** Metadatos por fila (indexados por fila del MODELO) para saber si es separador y su nivel. */
     private final List<Boolean> esSeparadorPorFila = new ArrayList<>();
     private final List<Integer> nivelPorFila = new ArrayList<>();
+    private final List<Partida> partidaPorFila = new ArrayList<>();
 
     private static final String[] COLUMNAS = {
             "Codigo", "Descripcion", "Unidad", "Presupuestado (S/.)", "Ejecutado (S/.)", "Diferencia (S/.)", "% Avance"
@@ -90,7 +92,47 @@ public class PartidasView extends JPanel {
         // si la descripcion es muy larga, aparece scroll horizontal en vez de recortar.
         tabla.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
 
-        add(new JScrollPane(tabla), BorderLayout.CENTER);
+        tabla.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2) abrirDetalleSeleccionada();
+            }
+        });
+
+        JPanel barra = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        barra.setOpaque(false);
+        JButton btnDetalle = new JButton("Ver metrados / APU");
+        btnDetalle.setFont(Theme.FONT_BASE);
+        btnDetalle.setFocusPainted(false);
+        btnDetalle.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btnDetalle.setToolTipText("Doble clic en una partida tambien abre su detalle");
+        btnDetalle.addActionListener(e -> abrirDetalleSeleccionada());
+        barra.add(btnDetalle);
+
+        JPanel centro = new JPanel(new BorderLayout(0, 8));
+        centro.setOpaque(false);
+        centro.add(barra, BorderLayout.NORTH);
+        centro.add(new JScrollPane(tabla), BorderLayout.CENTER);
+        add(centro, BorderLayout.CENTER);
+    }
+
+    /** Abre el dialogo de metrados/APU para la partida seleccionada (solo partidas hoja, no secciones). */
+    private void abrirDetalleSeleccionada() {
+        int fila = tabla.getSelectedRow();
+        if (fila < 0) {
+            JOptionPane.showMessageDialog(this, "Selecciona una partida de la tabla.",
+                    "Sin seleccion", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        int modelRow = tabla.convertRowIndexToModel(fila);
+        if (esSeparador(modelRow)) {
+            JOptionPane.showMessageDialog(this, "Selecciona una partida ejecutable, no una seccion agrupadora.",
+                    "Seccion no valida", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        Partida p = (modelRow >= 0 && modelRow < partidaPorFila.size()) ? partidaPorFila.get(modelRow) : null;
+        if (p == null) return;
+        new PartidaDetalleDialog(SwingUtilities.getWindowAncestor(this), p).setVisible(true);
     }
 
     /**
@@ -135,6 +177,7 @@ public class PartidasView extends JPanel {
         tablaModelo.setRowCount(0);
         esSeparadorPorFila.clear();
         nivelPorFila.clear();
+        partidaPorFila.clear();
 
         if (obra == null) {
             tituloObra.setText("Selecciona una obra activa para ver sus partidas");
@@ -170,6 +213,7 @@ public class PartidasView extends JPanel {
                 });
                 esSeparadorPorFila.add(p.isEsPadre());
                 nivelPorFila.add(Math.max(1, p.getNivel()));
+                partidaPorFila.add(p);
             }
             ajustarAnchosColumnas();
         } catch (SQLException e) {

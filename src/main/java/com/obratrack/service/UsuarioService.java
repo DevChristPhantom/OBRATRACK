@@ -19,7 +19,7 @@ import java.util.logging.Logger;
  * Alta, autenticacion y gestion de usuarios del sistema.
  * Todo acceso a la base se serializa bajo {@link Database#LOCK}.
  */
-public class UsuarioService {
+public class UsuarioService implements IUsuarioService {
 
     private static final Logger LOG = AppLog.get(UsuarioService.class);
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");

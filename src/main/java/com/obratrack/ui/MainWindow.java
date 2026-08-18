@@ -1,19 +1,30 @@
 package com.obratrack.ui;
 
 import com.obratrack.core.AppInfo;
+import com.obratrack.core.Modo;
+import com.obratrack.core.RedEstado;
 import com.obratrack.model.Obra;
 import com.obratrack.model.Usuario;
-import com.obratrack.service.ObraService;
+import com.obratrack.red.RpcCliente;
+import com.obratrack.service.IObraService;
 import com.obratrack.service.Permisos;
+import com.obratrack.service.ServiceFactory;
 import com.obratrack.service.SesionActual;
 import com.obratrack.ui.views.AjustesView;
 import com.obratrack.ui.views.AlmacenView;
 import com.obratrack.ui.views.ComparativoView;
+import com.obratrack.ui.views.CronogramaView;
+import com.obratrack.ui.views.CuadernoView;
+import com.obratrack.ui.views.CumplimientoView;
 import com.obratrack.ui.views.DashboardView;
+import com.obratrack.ui.views.DocumentosView;
+import com.obratrack.ui.views.FormulaPolinomicaView;
 import com.obratrack.ui.views.ObrasView;
 import com.obratrack.ui.views.PartidasView;
+import com.obratrack.ui.views.PresupuestoAnaliticoView;
 import com.obratrack.ui.views.ReportesView;
 import com.obratrack.ui.views.UsuariosView;
+import com.obratrack.ui.views.ValorizacionesView;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -31,7 +42,7 @@ public final class MainWindow extends JFrame {
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contenido = new JPanel(cardLayout);
     private final JComboBox<Obra> comboObraActiva = new JComboBox<>();
-    private final ObraService obraService = new ObraService();
+    private final IObraService obraService = ServiceFactory.obra();
 
     /** Botones de navegacion por clave de vista, para poder resaltar el activo. */
     private final Map<String, JButton> botonesNav = new LinkedHashMap<>();
@@ -41,7 +52,14 @@ public final class MainWindow extends JFrame {
     private DashboardView dashboardView;
     private ObrasView obrasView;
     private PartidasView partidasView;
+    private CronogramaView cronogramaView;
+    private CuadernoView cuadernoView;
     private AlmacenView almacenView;
+    private ValorizacionesView valorizacionesView;
+    private PresupuestoAnaliticoView presupuestoAnaliticoView;
+    private FormulaPolinomicaView formulaPolinomicaView;
+    private DocumentosView documentosView;
+    private CumplimientoView cumplimientoView;
     private ComparativoView comparativoView;
     private ReportesView reportesView;
     private UsuariosView usuariosView;
@@ -86,8 +104,14 @@ public final class MainWindow extends JFrame {
                 BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.BORDER),
                 new EmptyBorder(4, 14, 4, 14)));
         Usuario u = SesionActual.getUsuario();
+        String etiquetaModo = switch (RedEstado.modo()) {
+            case LOCAL -> "";
+            case ANFITRIONA -> "   ·   PC anfitriona (puerto " + RedEstado.puerto() + ")";
+            case CLIENTE -> "   ·   Conectado a " + RedEstado.urlHost();
+        };
         JLabel izq = new JLabel(AppInfo.NOMBRE + " v" + AppInfo.VERSION
-                + (u != null ? "   ·   " + u.getNombreParaMostrar() + " (" + u.getRol() + ")" : ""));
+                + (u != null ? "   ·   " + u.getNombreParaMostrar() + " (" + u.getRol().etiqueta() + ")" : "")
+                + etiquetaModo);
         izq.setFont(Theme.FONT_SMALL);
         izq.setForeground(Theme.TEXT_SECONDARY);
         statusObra.setFont(Theme.FONT_SMALL);
@@ -141,7 +165,21 @@ public final class MainWindow extends JFrame {
         sidebar.add(Box.createVerticalStrut(4));
         sidebar.add(botonNav("Partidas", "partidas", "partidas"));
         sidebar.add(Box.createVerticalStrut(4));
+        sidebar.add(botonNav("Cronograma", "comparativo", "cronograma"));
+        sidebar.add(Box.createVerticalStrut(4));
+        sidebar.add(botonNav("Cuaderno de Obra", "info", "cuaderno"));
+        sidebar.add(Box.createVerticalStrut(4));
+        sidebar.add(botonNav("Documentos", "download", "documentos"));
+        sidebar.add(Box.createVerticalStrut(4));
+        sidebar.add(botonNav("Cumplimiento", "lock", "cumplimiento"));
+        sidebar.add(Box.createVerticalStrut(4));
         sidebar.add(botonNav("Almacen", "almacen", "almacen"));
+        sidebar.add(Box.createVerticalStrut(4));
+        sidebar.add(botonNav("Valorizaciones", "money", "valorizaciones"));
+        sidebar.add(Box.createVerticalStrut(4));
+        sidebar.add(botonNav("Presupuesto Analitico", "money", "presupuesto_analitico"));
+        sidebar.add(Box.createVerticalStrut(4));
+        sidebar.add(botonNav("Formula Polinomica", "search", "formula"));
         sidebar.add(Box.createVerticalStrut(4));
         sidebar.add(botonNav("Comparativo", "comparativo", "comparativo"));
         sidebar.add(Box.createVerticalStrut(4));
@@ -198,6 +236,7 @@ public final class MainWindow extends JFrame {
                 "¿Cerrar la sesion actual?",
                 "Cerrar sesion", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
         if (op == JOptionPane.YES_OPTION) {
+            if (RedEstado.modo() == Modo.CLIENTE) RpcCliente.logout();
             SesionActual.cerrar();
             dispose();
             new LoginView(() -> new MainWindow().setVisible(true)).setVisible(true);
@@ -324,7 +363,7 @@ public final class MainWindow extends JFrame {
         JLabel nombre = new JLabel(u != null ? u.getNombreParaMostrar() : "Usuario");
         nombre.setFont(Theme.FONT_BOLD);
         nombre.setForeground(Theme.TEXT_PRIMARY);
-        JLabel rol = new JLabel(u != null ? rolLegible(u.getRol()) : "Gestion de obras");
+        JLabel rol = new JLabel(u != null ? u.getRol().etiqueta() : "Gestion de obras");
         rol.setFont(Theme.FONT_SMALL);
         rol.setForeground(Theme.TEXT_SECONDARY);
         textos.add(nombre);
@@ -334,19 +373,18 @@ public final class MainWindow extends JFrame {
         return card;
     }
 
-    private String rolLegible(Usuario.Rol rol) {
-        return switch (rol) {
-            case ADMIN -> "Administrador";
-            case JEFE_OBRA -> "Jefe de obra";
-            case ALMACENERO -> "Almacenero";
-        };
-    }
-
     private void construirVistas() {
         dashboardView = new DashboardView(this::obtenerObraActiva);
         obrasView = new ObrasView(this::onObraCreada, this::onObrasModificadas);
         partidasView = new PartidasView(this::obtenerObraActiva);
+        cronogramaView = new CronogramaView(this::obtenerObraActiva);
+        cuadernoView = new CuadernoView(this::obtenerObraActiva);
+        documentosView = new DocumentosView(this::obtenerObraActiva);
+        cumplimientoView = new CumplimientoView(this::obtenerObraActiva);
         almacenView = new AlmacenView(this::obtenerObraActiva, this::refrescarVistaActual);
+        valorizacionesView = new ValorizacionesView(this::obtenerObraActiva);
+        presupuestoAnaliticoView = new PresupuestoAnaliticoView(this::obtenerObraActiva);
+        formulaPolinomicaView = new FormulaPolinomicaView(this::obtenerObraActiva);
         comparativoView = new ComparativoView(this::obtenerObraActiva);
         reportesView = new ReportesView(this::obtenerObraActiva);
         usuariosView = new UsuariosView();
@@ -355,7 +393,14 @@ public final class MainWindow extends JFrame {
         contenido.add(dashboardView, "dashboard");
         contenido.add(obrasView, "obras");
         contenido.add(partidasView, "partidas");
+        contenido.add(cronogramaView, "cronograma");
+        contenido.add(cuadernoView, "cuaderno");
+        contenido.add(documentosView, "documentos");
+        contenido.add(cumplimientoView, "cumplimiento");
         contenido.add(almacenView, "almacen");
+        contenido.add(valorizacionesView, "valorizaciones");
+        contenido.add(presupuestoAnaliticoView, "presupuesto_analitico");
+        contenido.add(formulaPolinomicaView, "formula");
         contenido.add(comparativoView, "comparativo");
         contenido.add(reportesView, "reportes");
         contenido.add(usuariosView, "usuarios");
@@ -391,7 +436,14 @@ public final class MainWindow extends JFrame {
         switch (vistaActual) {
             case "dashboard" -> dashboardView.refrescar();
             case "partidas" -> partidasView.refrescar();
+            case "cronograma" -> cronogramaView.refrescar();
+            case "cuaderno" -> cuadernoView.refrescar();
+            case "documentos" -> documentosView.refrescar();
+            case "cumplimiento" -> cumplimientoView.refrescar();
             case "almacen" -> almacenView.refrescar();
+            case "valorizaciones" -> valorizacionesView.refrescar();
+            case "presupuesto_analitico" -> presupuestoAnaliticoView.refrescar();
+            case "formula" -> formulaPolinomicaView.refrescar();
             case "comparativo" -> comparativoView.refrescar();
             case "reportes" -> reportesView.refrescar();
             case "usuarios" -> usuariosView.refrescar();
@@ -400,7 +452,7 @@ public final class MainWindow extends JFrame {
         }
     }
 
-    /** Atajos de teclado globales (Ctrl+1..6 vistas, F1 acerca, Ctrl+L salir sesion, Ctrl+Q salir). */
+    /** Atajos de teclado globales (Ctrl+0..9 vistas, F1 acerca, Ctrl+L salir sesion, Ctrl+Q salir). */
     private void registrarAtajos() {
         JRootPane rp = getRootPane();
         InputMap im = rp.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
@@ -412,6 +464,10 @@ public final class MainWindow extends JFrame {
         atajo(im, am, KeyStroke.getKeyStroke(KeyEvent.VK_4, ctrl), "v4", () -> mostrarVista("almacen"));
         atajo(im, am, KeyStroke.getKeyStroke(KeyEvent.VK_5, ctrl), "v5", () -> mostrarVista("comparativo"));
         atajo(im, am, KeyStroke.getKeyStroke(KeyEvent.VK_6, ctrl), "v6", () -> mostrarVista("reportes"));
+        atajo(im, am, KeyStroke.getKeyStroke(KeyEvent.VK_7, ctrl), "v7", () -> mostrarVista("cronograma"));
+        atajo(im, am, KeyStroke.getKeyStroke(KeyEvent.VK_8, ctrl), "v8", () -> mostrarVista("cuaderno"));
+        atajo(im, am, KeyStroke.getKeyStroke(KeyEvent.VK_9, ctrl), "v9", () -> mostrarVista("valorizaciones"));
+        atajo(im, am, KeyStroke.getKeyStroke(KeyEvent.VK_0, ctrl), "v0", () -> mostrarVista("documentos"));
         atajo(im, am, KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0), "acerca", () -> AcercaDe.mostrar(this));
         atajo(im, am, KeyStroke.getKeyStroke(KeyEvent.VK_L, ctrl), "logout", this::cerrarSesion);
         atajo(im, am, KeyStroke.getKeyStroke(KeyEvent.VK_Q, ctrl), "salir", this::confirmarSalida);

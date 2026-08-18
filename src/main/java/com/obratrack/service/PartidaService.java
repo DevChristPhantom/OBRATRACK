@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** CRUD de partidas de obra. Todo acceso se serializa bajo {@link Database#LOCK}. */
-public class PartidaService {
+public class PartidaService implements IPartidaService {
 
     public void guardarTodas(long obraId, List<Partida> partidas) throws SQLException {
         String sql = """

@@ -35,6 +35,10 @@ public final class Database {
     }
 
     public static synchronized Connection get() throws SQLException {
+        if (RedEstado.modo() == Modo.CLIENTE) {
+            throw new SQLException("Esta PC esta conectada como cliente a otra PC de la obra; "
+                    + "esta funcion todavia no esta disponible en red (se agregara mas adelante).");
+        }
         if (connection == null || connection.isClosed()) {
             String url = "jdbc:sqlite:" + dbPath().toString();
             connection = DriverManager.getConnection(url);
@@ -92,7 +96,14 @@ public final class Database {
                     presupuesto_total REAL DEFAULT 0,
                     estado TEXT DEFAULT 'ACTIVA',
                     ruta_excel_origen TEXT,
-                    fecha_creacion TEXT
+                    fecha_creacion TEXT,
+                    ubicacion TEXT,
+                    entidad_contratante TEXT,
+                    modalidad_ejecucion TEXT,
+                    sectores_bloques TEXT,
+                    pct_gastos_generales REAL DEFAULT 0,
+                    pct_utilidad REAL DEFAULT 0,
+                    pct_igv REAL DEFAULT 18.0
                 );
             """);
 
@@ -160,7 +171,186 @@ public final class Database {
                 );
             """);
 
+            // Cronograma: actividades con fechas programadas/reales y peso dentro del avance
+            // total de la obra (curva S). partida_id es opcional, para relacionar con el costo.
+            st.execute("""
+                CREATE TABLE IF NOT EXISTS actividad (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    obra_id INTEGER NOT NULL,
+                    partida_id INTEGER,
+                    codigo TEXT,
+                    descripcion TEXT NOT NULL,
+                    fecha_inicio_prog TEXT NOT NULL,
+                    fecha_fin_prog TEXT NOT NULL,
+                    fecha_inicio_real TEXT,
+                    fecha_fin_real TEXT,
+                    peso_porcentual REAL DEFAULT 0,
+                    avance_real REAL DEFAULT 0,
+                    orden INTEGER DEFAULT 0,
+                    FOREIGN KEY (obra_id) REFERENCES obra(id) ON DELETE CASCADE,
+                    FOREIGN KEY (partida_id) REFERENCES partida(id) ON DELETE SET NULL
+                );
+            """);
+
+            // Cuaderno de obra digital: asientos append-only (registro legal de la obra),
+            // numerados de forma correlativa por obra como un cuaderno foliado.
+            st.execute("""
+                CREATE TABLE IF NOT EXISTS asiento_cuaderno (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    obra_id INTEGER NOT NULL,
+                    numero INTEGER NOT NULL,
+                    fecha TEXT NOT NULL,
+                    tipo TEXT NOT NULL,
+                    clima TEXT,
+                    personal_obra INTEGER DEFAULT 0,
+                    texto TEXT NOT NULL,
+                    usuario_registro TEXT,
+                    creado_en TEXT,
+                    FOREIGN KEY (obra_id) REFERENCES obra(id) ON DELETE CASCADE
+                );
+            """);
+
+            // Valorizaciones mensuales: corte formal del avance ejecutado en un periodo,
+            // con retencion de garantia y neto a pagar. Append-only (numeracion correlativa).
+            st.execute("""
+                CREATE TABLE IF NOT EXISTS valorizacion (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    obra_id INTEGER NOT NULL,
+                    numero INTEGER NOT NULL,
+                    periodo_desde TEXT NOT NULL,
+                    periodo_hasta TEXT NOT NULL,
+                    fecha_emision TEXT NOT NULL,
+                    monto_ejecutado_periodo REAL DEFAULT 0,
+                    monto_acumulado_antes REAL DEFAULT 0,
+                    pct_retencion REAL DEFAULT 0,
+                    monto_retencion REAL DEFAULT 0,
+                    monto_amortizacion_adelanto REAL DEFAULT 0,
+                    monto_neto_pagar REAL DEFAULT 0,
+                    observaciones TEXT,
+                    usuario_registro TEXT,
+                    creado_en TEXT,
+                    FOREIGN KEY (obra_id) REFERENCES obra(id) ON DELETE CASCADE
+                );
+            """);
+
+            // Metrado desagregado por sector/bloque de cada partida (obra grande con varios frentes).
+            st.execute("""
+                CREATE TABLE IF NOT EXISTS metrado_detalle (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    partida_id INTEGER NOT NULL,
+                    obra_id INTEGER NOT NULL,
+                    sector TEXT NOT NULL,
+                    cantidad REAL DEFAULT 0,
+                    observacion TEXT,
+                    FOREIGN KEY (partida_id) REFERENCES partida(id) ON DELETE CASCADE,
+                    FOREIGN KEY (obra_id) REFERENCES obra(id) ON DELETE CASCADE
+                );
+            """);
+
+            // Analisis de precios unitarios (APU): insumos (mano de obra/material/equipo/subcontrato)
+            // que componen el costo unitario de cada partida.
+            st.execute("""
+                CREATE TABLE IF NOT EXISTS apu_insumo (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    partida_id INTEGER NOT NULL,
+                    obra_id INTEGER NOT NULL,
+                    tipo TEXT NOT NULL,
+                    descripcion TEXT NOT NULL,
+                    unidad TEXT,
+                    cantidad REAL DEFAULT 0,
+                    precio_unitario REAL DEFAULT 0,
+                    FOREIGN KEY (partida_id) REFERENCES partida(id) ON DELETE CASCADE,
+                    FOREIGN KEY (obra_id) REFERENCES obra(id) ON DELETE CASCADE
+                );
+            """);
+
+            // Documentos: planos (con version), especificaciones tecnicas, fotos de avance y
+            // anexos. El archivo real vive en disco (Rutas.documentos()); aqui solo la metadata.
+            st.execute("""
+                CREATE TABLE IF NOT EXISTS documento (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    obra_id INTEGER NOT NULL,
+                    partida_id INTEGER,
+                    categoria TEXT NOT NULL,
+                    nombre TEXT NOT NULL,
+                    version INTEGER DEFAULT 1,
+                    ruta_archivo TEXT NOT NULL,
+                    nombre_archivo_original TEXT,
+                    tamano_bytes INTEGER DEFAULT 0,
+                    fecha TEXT NOT NULL,
+                    descripcion TEXT,
+                    usuario_registro TEXT,
+                    creado_en TEXT,
+                    FOREIGN KEY (obra_id) REFERENCES obra(id) ON DELETE CASCADE,
+                    FOREIGN KEY (partida_id) REFERENCES partida(id) ON DELETE SET NULL
+                );
+            """);
+
             st.execute("CREATE INDEX IF NOT EXISTS idx_partida_obra ON partida(obra_id);");
+            st.execute("CREATE INDEX IF NOT EXISTS idx_actividad_obra ON actividad(obra_id);");
+            st.execute("CREATE INDEX IF NOT EXISTS idx_asiento_obra ON asiento_cuaderno(obra_id);");
+            st.execute("CREATE INDEX IF NOT EXISTS idx_valorizacion_obra ON valorizacion(obra_id);");
+            st.execute("CREATE INDEX IF NOT EXISTS idx_metrado_partida ON metrado_detalle(partida_id);");
+            st.execute("CREATE INDEX IF NOT EXISTS idx_apu_partida ON apu_insumo(partida_id);");
+            // Gestion y cumplimiento: riesgos, compromisos ambientales, control de calidad y SST.
+            // Comparten la misma forma (se identifica, se hace seguimiento, se cierra); solo RIESGO
+            // usa probabilidad/impacto para calcular la severidad, en el resto se elige directamente.
+            st.execute("""
+                CREATE TABLE IF NOT EXISTS item_cumplimiento (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    obra_id INTEGER NOT NULL,
+                    partida_id INTEGER,
+                    categoria TEXT NOT NULL,
+                    descripcion TEXT NOT NULL,
+                    probabilidad TEXT,
+                    impacto TEXT,
+                    severidad TEXT NOT NULL,
+                    fecha TEXT NOT NULL,
+                    fecha_limite TEXT,
+                    estado TEXT NOT NULL,
+                    fecha_cierre TEXT,
+                    responsable TEXT,
+                    accion_seguimiento TEXT,
+                    usuario_registro TEXT,
+                    creado_en TEXT,
+                    FOREIGN KEY (obra_id) REFERENCES obra(id) ON DELETE CASCADE,
+                    FOREIGN KEY (partida_id) REFERENCES partida(id) ON DELETE SET NULL
+                );
+            """);
+
+            st.execute("CREATE INDEX IF NOT EXISTS idx_documento_obra ON documento(obra_id, categoria);");
+            // Adicionales y deductivos: modificaciones aprobadas al presupuesto contractual.
+            st.execute("""
+                CREATE TABLE IF NOT EXISTS adicional_deductivo (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    obra_id INTEGER NOT NULL,
+                    numero INTEGER NOT NULL,
+                    tipo TEXT NOT NULL,
+                    descripcion TEXT NOT NULL,
+                    monto REAL DEFAULT 0,
+                    fecha_aprobacion TEXT NOT NULL,
+                    resolucion_aprobacion TEXT,
+                    usuario_registro TEXT,
+                    creado_en TEXT,
+                    FOREIGN KEY (obra_id) REFERENCES obra(id) ON DELETE CASCADE
+                );
+            """);
+            st.execute("CREATE INDEX IF NOT EXISTS idx_adicional_obra ON adicional_deductivo(obra_id);");
+            // Formula polinomica: elementos (mano de obra, materiales, equipo...) con su
+            // coeficiente de incidencia e indice de precios base, para el reajuste por INEI.
+            st.execute("""
+                CREATE TABLE IF NOT EXISTS monomio_polinomico (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    obra_id INTEGER NOT NULL,
+                    descripcion TEXT NOT NULL,
+                    coeficiente_incidencia REAL DEFAULT 0,
+                    indice_base REAL DEFAULT 0,
+                    FOREIGN KEY (obra_id) REFERENCES obra(id) ON DELETE CASCADE
+                );
+            """);
+
+            st.execute("CREATE INDEX IF NOT EXISTS idx_cumplimiento_obra ON item_cumplimiento(obra_id, categoria);");
+            st.execute("CREATE INDEX IF NOT EXISTS idx_monomio_obra ON monomio_polinomico(obra_id);");
             st.execute("CREATE INDEX IF NOT EXISTS idx_mov_obra ON movimiento_almacen(obra_id);");
             st.execute("CREATE INDEX IF NOT EXISTS idx_mov_partida ON movimiento_almacen(partida_id);");
             // Indice compuesto para el comparativo temporal y los reportes por fecha:
@@ -177,6 +367,13 @@ public final class Database {
         agregarColumnaSiFalta(conn, "movimiento_almacen", "creado_en", "TEXT");
         agregarColumnaSiFalta(conn, "movimiento_almacen", "actualizado_en", "TEXT");
         agregarColumnaSiFalta(conn, "usuario", "debe_cambiar_password", "INTEGER NOT NULL DEFAULT 0");
+        agregarColumnaSiFalta(conn, "obra", "ubicacion", "TEXT");
+        agregarColumnaSiFalta(conn, "obra", "entidad_contratante", "TEXT");
+        agregarColumnaSiFalta(conn, "obra", "modalidad_ejecucion", "TEXT");
+        agregarColumnaSiFalta(conn, "obra", "sectores_bloques", "TEXT");
+        agregarColumnaSiFalta(conn, "obra", "pct_gastos_generales", "REAL DEFAULT 0");
+        agregarColumnaSiFalta(conn, "obra", "pct_utilidad", "REAL DEFAULT 0");
+        agregarColumnaSiFalta(conn, "obra", "pct_igv", "REAL DEFAULT 18.0");
     }
 
     private static void agregarColumnaSiFalta(Connection conn, String tabla, String columna, String tipo)

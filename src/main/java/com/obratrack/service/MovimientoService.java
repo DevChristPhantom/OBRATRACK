@@ -27,7 +27,7 @@ import java.util.Objects;
  * ejecutan bajo {@link Database#LOCK} para no colisionar con los {@code SwingWorker}
  * de fondo que consultan la base (p. ej. la carga del Dashboard).
  */
-public class MovimientoService {
+public class MovimientoService implements IMovimientoService {
 
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter FMT_DIA_MES = DateTimeFormatter.ofPattern("dd/MM");
@@ -216,6 +216,25 @@ public class MovimientoService {
         synchronized (Database.LOCK) {
             try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
                 ps.setLong(1, obraId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) return rs.getDouble("total");
+                }
+            }
+        }
+        return 0;
+    }
+
+    /** Total ejecutado (neto) de la obra entre dos fechas (inclusive), para las valorizaciones. */
+    public double totalEjecutadoEntreFechas(long obraId, LocalDate desde, LocalDate hasta) throws SQLException {
+        String sql = """
+            SELECT SUM(CASE WHEN tipo = 'EGRESO' THEN costo_total_real ELSE -costo_total_real END) AS total
+            FROM movimiento_almacen WHERE obra_id = ? AND fecha >= ? AND fecha <= ?
+        """;
+        synchronized (Database.LOCK) {
+            try (PreparedStatement ps = Database.get().prepareStatement(sql)) {
+                ps.setLong(1, obraId);
+                ps.setString(2, desde.toString());
+                ps.setString(3, hasta.toString());
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) return rs.getDouble("total");
                 }
