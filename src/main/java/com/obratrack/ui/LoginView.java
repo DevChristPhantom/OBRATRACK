@@ -271,8 +271,9 @@ public class LoginView extends JFrame {
         panel.add(logoImg);
         panel.add(Box.createVerticalStrut(16));
 
-        JLabel tagline = new JLabel("<html><div style='text-align:center;width:340px'>"
-                + "Sistema integral para el control de partidas, precios de obra y gestion de almacen."
+        JLabel tagline = new JLabel("<html><div style='text-align:center'>"
+                + "Sistema integral para el control de partidas,<br>"
+                + "precios de obra y gestion de almacen."
                 + "</div></html>");
         tagline.setFont(Theme.FONT_BASE);
         tagline.setForeground(CLARO_TXT);
@@ -284,10 +285,10 @@ public class LoginView extends JFrame {
         modulos.setOpaque(false);
         modulos.setMaximumSize(new Dimension(470, 96));
         modulos.setAlignmentX(Component.CENTER_ALIGNMENT);
-        modulos.add(modulo("partidas", "Control de Partidas"));
-        modulos.add(modulo("money", "Precios de Obra"));
-        modulos.add(modulo("almacen", "Gestion de Almacen"));
-        modulos.add(modulo("reportes", "Reportes y Analisis"));
+        modulos.add(modulo("partidas", "Control de<br>Partidas"));
+        modulos.add(modulo("money", "Precios de<br>Obra"));
+        modulos.add(modulo("almacen", "Gestion de<br>Almacen"));
+        modulos.add(modulo("reportes", "Reportes y<br>Analisis"));
         panel.add(modulos);
 
         panel.add(Box.createVerticalGlue());
@@ -300,7 +301,7 @@ public class LoginView extends JFrame {
         p.setOpaque(false);
         JLabel ic = new JLabel(new IconoRecuadro(Icons.get(icono, 24, Color.WHITE)));
         ic.setAlignmentX(Component.CENTER_ALIGNMENT);
-        JLabel tx = new JLabel("<html><div style='text-align:center;width:98px'>" + texto + "</div></html>");
+        JLabel tx = new JLabel("<html><div style='text-align:center'>" + texto + "</div></html>");
         tx.setFont(Theme.FONT_SMALL);
         tx.setForeground(CLARO_TXT);
         tx.setAlignmentX(Component.CENTER_ALIGNMENT);
