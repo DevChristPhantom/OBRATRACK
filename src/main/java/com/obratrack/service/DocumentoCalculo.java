@@ -3,6 +3,7 @@ package com.obratrack.service;
 import com.obratrack.model.Documento;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Logica pura de documentos (sin base de datos): siguiente numero de version
@@ -21,10 +22,10 @@ public final class DocumentoCalculo {
     public static String formatoTamano(long bytes) {
         if (bytes < 1024) return bytes + " B";
         double kb = bytes / 1024.0;
-        if (kb < 1024) return String.format("%.1f KB", kb);
+        if (kb < 1024) return String.format(Locale.US, "%.1f KB", kb);
         double mb = kb / 1024.0;
-        if (mb < 1024) return String.format("%.1f MB", mb);
+        if (mb < 1024) return String.format(Locale.US, "%.1f MB", mb);
         double gb = mb / 1024.0;
-        return String.format("%.2f GB", gb);
+        return String.format(Locale.US, "%.2f GB", gb);
     }
 }
