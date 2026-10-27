@@ -33,7 +33,7 @@ public class Main {
         log.info("Iniciando " + AppInfo.NOMBRE + " " + AppInfo.VERSION);
 
         FlatLightLaf.setup();
-        UIManager.put("defaultFont", new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 13));
+        com.obratrack.ui.Theme.configurar();
 
         SwingUtilities.invokeLater(() -> {
             if (RedEstado.existeConfigGuardada()) {

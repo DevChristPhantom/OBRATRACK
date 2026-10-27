@@ -128,8 +128,8 @@ public final class MainWindow extends JFrame {
                 BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.BORDER),
                 new EmptyBorder(10, 16, 10, 16)));
 
-        JLabel titulo = new JLabel("  ObraTrack", Icons.get("obras", 22, Theme.PRIMARY), SwingConstants.LEFT);
-        titulo.setFont(Theme.FONT_TITLE);
+        JLabel titulo = new JLabel("Espacio de trabajo");
+        titulo.setFont(Theme.FONT_BOLD);
         titulo.setForeground(Theme.TEXT_PRIMARY);
         titulo.setIconTextGap(8);
         barra.add(titulo, BorderLayout.WEST);
@@ -140,7 +140,7 @@ public final class MainWindow extends JFrame {
         lbl.setForeground(Theme.TEXT_SECONDARY);
         lbl.setFont(Theme.FONT_BASE);
         comboObraActiva.setFont(Theme.FONT_BASE);
-        comboObraActiva.setPreferredSize(new Dimension(280, 32));
+        comboObraActiva.setPreferredSize(new Dimension(310, 36));
         comboObraActiva.addActionListener(e -> onObraActivaCambiada());
         obraPanel.add(lbl);
         obraPanel.add(comboObraActiva);
@@ -150,60 +150,88 @@ public final class MainWindow extends JFrame {
     }
 
     private JPanel construirSidebar() {
-        JPanel sidebar = new JPanel();
-        sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
-        sidebar.setBackground(Theme.BG_SECONDARY);
-        sidebar.setPreferredSize(new Dimension(220, 0));
-        sidebar.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 0, 1, Theme.BORDER),
-                new EmptyBorder(14, 12, 14, 12)));
+        JPanel sidebar = new JPanel(new BorderLayout(0, 12));
+        sidebar.setBackground(Theme.SIDEBAR);
+        sidebar.setPreferredSize(new Dimension(246, 0));
+        sidebar.setBorder(new EmptyBorder(20, 12, 12, 12));
 
-        sidebar.add(botonNav("Dashboard", "home", "dashboard"));
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(botonNav("Obras", "obras", "obras"));
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(botonNav("Partidas", "partidas", "partidas"));
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(botonNav("Cronograma", "comparativo", "cronograma"));
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(botonNav("Cuaderno de Obra", "info", "cuaderno"));
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(botonNav("Documentos", "download", "documentos"));
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(botonNav("Cumplimiento", "lock", "cumplimiento"));
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(botonNav("Almacen", "almacen", "almacen"));
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(botonNav("Valorizaciones", "money", "valorizaciones"));
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(botonNav("Presupuesto Analitico", "money", "presupuesto_analitico"));
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(botonNav("Formula Polinomica", "search", "formula"));
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(botonNav("Comparativo", "comparativo", "comparativo"));
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(botonNav("Reportes", "reportes", "reportes"));
-        if (Permisos.puedeGestionarUsuarios()) {
-            sidebar.add(Box.createVerticalStrut(4));
-            sidebar.add(botonNav("Usuarios", "admin", "usuarios"));
-        }
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(botonNav("Ajustes", "settings", "ajustes"));
+        JPanel marca = new JPanel(new BorderLayout(10, 0));
+        marca.setOpaque(false);
+        marca.setBorder(new EmptyBorder(0, 10, 12, 4));
+        marca.add(new JLabel(Icons.get("obras", 30, Color.WHITE)), BorderLayout.WEST);
+        JLabel nombre = new JLabel("<html><b>ObraTrack</b><br><span style='font-size:9px'>GESTIÓN DE OBRAS</span></html>");
+        nombre.setFont(Theme.FONT_TITLE.deriveFont(20f));
+        nombre.setForeground(Color.WHITE);
+        marca.add(nombre);
+        sidebar.add(marca, BorderLayout.NORTH);
 
-        sidebar.add(Box.createVerticalStrut(20));
-        sidebar.add(seccionAtajos());
-        sidebar.add(seccionAtajosPanel());
+        JPanel menu = new JPanel();
+        menu.setLayout(new BoxLayout(menu, BoxLayout.Y_AXIS));
+        menu.setBackground(Theme.SIDEBAR);
+        menu.add(seccionMenu("GENERAL"));
+        agregarNav(menu, "Resumen", "home", "dashboard");
+        agregarNav(menu, "Obras", "obras", "obras");
+        menu.add(seccionMenu("PLANIFICACIÓN Y CONTROL"));
+        agregarNav(menu, "Partidas", "partidas", "partidas");
+        agregarNav(menu, "Cronograma", "comparativo", "cronograma");
+        agregarNav(menu, "Cuaderno de obra", "info", "cuaderno");
+        agregarNav(menu, "Almacén", "almacen", "almacen");
+        agregarNav(menu, "Valorizaciones", "money", "valorizaciones");
+        agregarNav(menu, "Presupuesto analítico", "money", "presupuesto_analitico");
+        agregarNav(menu, "Fórmula polinómica", "search", "formula");
+        menu.add(seccionMenu("GESTIÓN Y ANÁLISIS"));
+        agregarNav(menu, "Documentos", "download", "documentos");
+        agregarNav(menu, "Cumplimiento", "lock", "cumplimiento");
+        agregarNav(menu, "Comparativo", "comparativo", "comparativo");
+        agregarNav(menu, "Reportes", "reportes", "reportes");
+        if (Permisos.puedeGestionarUsuarios()) agregarNav(menu, "Usuarios", "admin", "usuarios");
+        agregarNav(menu, "Ajustes", "settings", "ajustes");
+        JScrollPane scroll = new JScrollPane(menu);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.getViewport().setBackground(Theme.SIDEBAR);
+        scroll.getVerticalScrollBar().setPreferredSize(new Dimension(8, 0));
+        scroll.getVerticalScrollBar().setUI(new javax.swing.plaf.basic.BasicScrollBarUI() {
+            @Override protected void configureScrollBarColors() {
+                thumbColor = Theme.SIDEBAR_ACTIVE;
+                trackColor = Theme.SIDEBAR;
+            }
+            @Override protected JButton createDecreaseButton(int orientation) { return botonCero(); }
+            @Override protected JButton createIncreaseButton(int orientation) { return botonCero(); }
+            private JButton botonCero() {
+                JButton b = new JButton();
+                b.setPreferredSize(new Dimension(0, 0));
+                return b;
+            }
+        });
+        scroll.getVerticalScrollBar().setUnitIncrement(30);
+        scroll.getVerticalScrollBar().putClientProperty("JScrollBar.showButtons", false);
+        sidebar.add(scroll, BorderLayout.CENTER);
 
-        sidebar.add(Box.createVerticalGlue());
-        sidebar.add(botonPie("Acerca de", "info", Theme.TEXT_SECONDARY, () -> AcercaDe.mostrar(this)));
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(tarjetaUsuario());
-        sidebar.add(Box.createVerticalStrut(8));
-        sidebar.add(botonPie("Cerrar sesion", "logout", Theme.TEXT_SECONDARY, this::cerrarSesion));
-        sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(botonPie("Salir", "close", Theme.DANGER, this::confirmarSalida));
-
+        JPanel pie = new JPanel();
+        pie.setOpaque(false);
+        pie.setLayout(new BoxLayout(pie, BoxLayout.Y_AXIS));
+        pie.add(tarjetaUsuario());
+        pie.add(Box.createVerticalStrut(8));
+        pie.add(botonPie("Acerca de", "info", Theme.SIDEBAR_TEXT, () -> AcercaDe.mostrar(this)));
+        pie.add(botonPie("Cerrar sesión", "logout", Theme.SIDEBAR_TEXT, this::cerrarSesion));
+        pie.add(botonPie("Salir", "close", new Color(0xfd, 0xa4, 0xaf), this::confirmarSalida));
+        sidebar.add(pie, BorderLayout.SOUTH);
         return sidebar;
+    }
+
+    private JLabel seccionMenu(String texto) {
+        JLabel label = new JLabel(texto);
+        label.setFont(Theme.FONT_SMALL.deriveFont(Font.BOLD, 11f));
+        label.setForeground(Theme.SIDEBAR_TEXT);
+        label.setBorder(new EmptyBorder(16, 12, 8, 0));
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return label;
+    }
+
+    private void agregarNav(JPanel menu, String texto, String icono, String vista) {
+        menu.add(botonNav(texto, icono, vista));
+        menu.add(Box.createVerticalStrut(3));
     }
 
     /** Boton generico del pie del sidebar (cerrar sesion / salir). */
@@ -213,18 +241,18 @@ public final class MainWindow extends JFrame {
         btn.setIconTextGap(10);
         btn.setFont(Theme.FONT_BOLD);
         btn.setForeground(color);
-        btn.setBackground(Theme.BG_SECONDARY);
+        btn.setBackground(Theme.SIDEBAR);
         btn.setOpaque(true);
         btn.setContentAreaFilled(true);
         btn.setBorderPainted(false);
-        btn.setFocusPainted(false);
+        btn.setFocusPainted(true);
         btn.setHorizontalAlignment(SwingConstants.LEFT);
         btn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
         btn.setBorder(BorderFactory.createEmptyBorder(9, 14, 9, 10));
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setAlignmentX(Component.LEFT_ALIGNMENT);
         btn.getModel().addChangeListener(e ->
-                btn.setBackground(btn.getModel().isRollover() ? Theme.NAV_HOVER : Theme.BG_SECONDARY));
+                btn.setBackground(btn.getModel().isRollover() ? Theme.SIDEBAR_HOVER : Theme.SIDEBAR));
         btn.addActionListener(e -> accion.run());
         return btn;
     }
@@ -286,24 +314,25 @@ public final class MainWindow extends JFrame {
 
     private JButton botonNav(String texto, String icono, String vista) {
         JButton btn = new JButton(texto);
-        btn.setIcon(Icons.get(icono, 20, Theme.TEXT_SECONDARY));
+        btn.setIcon(Icons.get(icono, 20, Theme.SIDEBAR_TEXT));
+        btn.putClientProperty("JButton.buttonType", "roundRect");
         btn.setIconTextGap(12);
         btn.setFont(Theme.FONT_BASE);
-        btn.setForeground(Theme.TEXT_SECONDARY);
-        btn.setBackground(Theme.BG_SECONDARY);
+        btn.setForeground(Theme.SIDEBAR_TEXT);
+        btn.setBackground(Theme.SIDEBAR);
         btn.setOpaque(true);
         btn.setContentAreaFilled(true);
         btn.setBorderPainted(false);
-        btn.setFocusPainted(false);
+        btn.setFocusPainted(true);
         btn.setHorizontalAlignment(SwingConstants.LEFT);
-        btn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
+        btn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
         btn.setBorder(BorderFactory.createEmptyBorder(10, 14, 10, 10));
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setAlignmentX(Component.LEFT_ALIGNMENT);
         btn.addActionListener(e -> mostrarVista(vista));
         btn.getModel().addChangeListener(e -> {
             if (!vista.equals(vistaActual)) {
-                btn.setBackground(btn.getModel().isRollover() ? Theme.NAV_HOVER : Theme.BG_SECONDARY);
+                btn.setBackground(btn.getModel().isRollover() ? Theme.SIDEBAR_HOVER : Theme.SIDEBAR);
             }
         });
         botonesNav.put(vista, btn);
@@ -347,12 +376,12 @@ public final class MainWindow extends JFrame {
 
     private JPanel tarjetaUsuario() {
         JPanel card = new JPanel(new BorderLayout(10, 0));
-        card.setBackground(Theme.BG_CARD);
+        card.setBackground(Theme.SIDEBAR_HOVER);
         card.setBorder(new EmptyBorder(10, 12, 10, 12));
         card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel avatar = new JLabel(Icons.get("account", 30, Theme.TEXT_PRIMARY));
+        JLabel avatar = new JLabel(Icons.get("account", 30, Color.WHITE));
         card.add(avatar, BorderLayout.WEST);
 
         JPanel textos = new JPanel();
@@ -361,10 +390,10 @@ public final class MainWindow extends JFrame {
         Usuario u = SesionActual.getUsuario();
         JLabel nombre = new JLabel(u != null ? u.getNombreParaMostrar() : "Usuario");
         nombre.setFont(Theme.FONT_BOLD);
-        nombre.setForeground(Theme.TEXT_PRIMARY);
+        nombre.setForeground(Color.WHITE);
         JLabel rol = new JLabel(u != null ? u.getRol().etiqueta() : "Gestion de obras");
         rol.setFont(Theme.FONT_SMALL);
-        rol.setForeground(Theme.TEXT_SECONDARY);
+        rol.setForeground(Theme.SIDEBAR_TEXT);
         textos.add(nombre);
         textos.add(rol);
         card.add(textos, BorderLayout.CENTER);
@@ -482,11 +511,12 @@ public final class MainWindow extends JFrame {
         for (Map.Entry<String, JButton> entry : botonesNav.entrySet()) {
             boolean activo = entry.getKey().equals(vistaActual);
             JButton btn = entry.getValue();
-            btn.setBackground(activo ? Theme.NAV_ACTIVE : Theme.BG_SECONDARY);
-            btn.setForeground(activo ? Theme.PRIMARY : Theme.TEXT_SECONDARY);
+            btn.setBackground(activo ? Theme.SIDEBAR_ACTIVE : Theme.SIDEBAR);
+            btn.setForeground(activo ? Color.WHITE : Theme.SIDEBAR_TEXT);
             btn.setFont(activo ? Theme.FONT_BOLD : Theme.FONT_BASE);
-            Color colorIcono = activo ? Theme.PRIMARY : Theme.TEXT_SECONDARY;
+            Color colorIcono = activo ? Color.WHITE : Theme.SIDEBAR_TEXT;
             btn.setIcon(Icons.get(iconosNav.get(entry.getKey()), 20, colorIcono));
+            if (activo) btn.scrollRectToVisible(new Rectangle(0, 0, btn.getWidth(), btn.getHeight()));
         }
     }
 

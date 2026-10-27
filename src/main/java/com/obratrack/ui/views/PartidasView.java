@@ -95,8 +95,10 @@ public class PartidasView extends JPanel {
             }
         };
         tabla.setFont(Theme.FONT_BASE);
-        tabla.setRowHeight(28);
+        tabla.setRowHeight(34);
         tabla.getTableHeader().setFont(Theme.FONT_BOLD);
+        tabla.getTableHeader().setPreferredSize(new Dimension(0, 40));
+        tabla.setIntercellSpacing(new Dimension(0, 1));
         tabla.setDefaultRenderer(Object.class, new FilaColorRenderer());
         tabla.setAutoCreateRowSorter(true);
         // No estirar columnas para llenar el ancho: respetamos los anchos calculados y,
@@ -110,7 +112,7 @@ public class PartidasView extends JPanel {
             }
         });
 
-        JPanel barra = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        JPanel barra = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 8));
         barra.setOpaque(false);
         JButton btnDetalle = new JButton("Ver metrados / APU");
         btnDetalle.setFont(Theme.FONT_BASE);
@@ -127,7 +129,10 @@ public class PartidasView extends JPanel {
             public void changedUpdate(javax.swing.event.DocumentEvent e) { filtrarPartidas(); }
         });
         barra.add(campoBusqueda);
-        botonExportar.setFont(Theme.FONT_BASE);
+        botonExportar.setFont(Theme.FONT_BOLD);
+        botonExportar.setBackground(Theme.PRIMARY);
+        botonExportar.setForeground(Color.WHITE);
+        campoBusqueda.putClientProperty("JTextField.placeholderText", "Código o descripción...");
         botonExportar.addActionListener(e -> exportarPartidas());
         barra.add(botonExportar);
 
@@ -362,7 +367,7 @@ public class PartidasView extends JPanel {
             if (separador) {
                 c.setFont(Theme.FONT_BOLD);
                 if (isSelected) {
-                    c.setBackground(Theme.BORDER);
+                    c.setBackground(Theme.NAV_ACTIVE);
                 } else {
                     c.setBackground(Theme.fondoSeparador(nivel));
                 }
@@ -384,7 +389,7 @@ public class PartidasView extends JPanel {
             }
 
             if (isSelected) {
-                c.setBackground(Theme.BORDER);
+                c.setBackground(Theme.NAV_ACTIVE);
             } else {
                 c.setBackground(fondo);
             }

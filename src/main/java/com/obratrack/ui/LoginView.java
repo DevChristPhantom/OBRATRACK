@@ -23,13 +23,13 @@ import java.util.prefs.Preferences;
 public class LoginView extends JFrame {
 
     // Paleta del panel claro (independiente del tema oscuro global)
-    private static final Color CARD = new Color(0xf7, 0xf8, 0xfb);
+    private static final Color CARD = Color.WHITE;
     private static final Color TITULO = new Color(0x1a, 0x20, 0x33);
-    private static final Color SUB = new Color(0x6b, 0x72, 0x84);
+    private static final Color SUB = Theme.TEXT_SECONDARY;
     private static final Color ICONO_CAMPO = new Color(0x9a, 0xa2, 0xb2);
     private static final Color AZUL = Theme.PRIMARY;
     private static final Color CLARO_TXT = new Color(0xd6, 0xdd, 0xea);
-    private static final String ESTILO_CAMPO = "arc:14;borderColor:#d8dde6;focusedBorderColor:#3b82f6";
+    private static final String ESTILO_CAMPO = "arc:14;borderColor:#d8dde6;focusedBorderColor:#1d4ed8";
 
     private final IUsuarioService usuarioService = ServiceFactory.usuario();
     private final Runnable alIngresar;
@@ -49,8 +49,8 @@ public class LoginView extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         URL iconoApp = getClass().getResource("/img/appicon.png");
         if (iconoApp != null) setIconImage(new ImageIcon(iconoApp).getImage());
-        setSize(980, 600);
-        setMinimumSize(new Dimension(840, 540));
+        setSize(1040, 680);
+        setMinimumSize(new Dimension(900, 620));
         setLocationRelativeTo(null);
 
         JPanel root = new JPanel(new GridLayout(1, 2));
@@ -98,14 +98,14 @@ public class LoginView extends JFrame {
         col.setLayout(new BoxLayout(col, BoxLayout.Y_AXIS));
 
         col.add(avatar());
-        col.add(Box.createVerticalStrut(16));
+        col.add(Box.createVerticalStrut(18));
 
-        JLabel bienvenido = new JLabel("¡Bienvenido de nuevo!");
-        bienvenido.setFont(new Font("Segoe UI", Font.BOLD, 19));
+        JLabel bienvenido = new JLabel("Tu obra, bajo control.");
+        bienvenido.setFont(new Font("Segoe UI", Font.BOLD, 25));
         bienvenido.setForeground(TITULO);
         bienvenido.setAlignmentX(Component.CENTER_ALIGNMENT);
         col.add(bienvenido);
-        JLabel instr = new JLabel("Inicia sesion para continuar");
+        JLabel instr = new JLabel("Accede a tu espacio de trabajo");
         instr.setFont(Theme.FONT_BASE);
         instr.setForeground(SUB);
         instr.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -113,12 +113,24 @@ public class LoginView extends JFrame {
         col.add(instr);
         col.add(Box.createVerticalStrut(22));
 
+        JLabel etiquetaUsuario = new JLabel("Usuario");
+        etiquetaUsuario.setFont(Theme.FONT_BOLD);
+        etiquetaUsuario.setAlignmentX(Component.CENTER_ALIGNMENT);
+        etiquetaUsuario.setLabelFor(campoUsuario);
+        col.add(etiquetaUsuario);
+        col.add(Box.createVerticalStrut(6));
         // Campo usuario (icono a la izquierda + placeholder)
-        estilizarCampo(campoUsuario, "account", "Usuario o correo electronico");
+        estilizarCampo(campoUsuario, "account", "Ingresa tu usuario");
         campoUsuario.addKeyListener(enterSalta(campoPassword));
         col.add(campoUsuario);
         col.add(Box.createVerticalStrut(12));
 
+        JLabel etiquetaPassword = new JLabel("Contraseña");
+        etiquetaPassword.setFont(Theme.FONT_BOLD);
+        etiquetaPassword.setAlignmentX(Component.CENTER_ALIGNMENT);
+        etiquetaPassword.setLabelFor(campoPassword);
+        col.add(etiquetaPassword);
+        col.add(Box.createVerticalStrut(6));
         // Campo contrasena (candado + placeholder + ojo para mostrar/ocultar)
         estilizarCampo(campoPassword, "lock", "Contrasena");
         echoOriginal = campoPassword.getEchoChar();
@@ -164,7 +176,7 @@ public class LoginView extends JFrame {
         btnIngresar.setFont(Theme.FONT_BOLD);
         btnIngresar.setForeground(Color.WHITE);
         btnIngresar.setBackground(AZUL);
-        btnIngresar.setFocusPainted(false);
+        btnIngresar.setFocusPainted(true);
         btnIngresar.setBorderPainted(false);
         btnIngresar.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btnIngresar.putClientProperty(FlatClientProperties.STYLE, "arc:14");
@@ -229,13 +241,13 @@ public class LoginView extends JFrame {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(AZUL);
                 g2.fillOval(0, 0, getWidth() - 1, getHeight() - 1);
-                Icon ic = Icons.get("account", 40, Color.WHITE);
+                Icon ic = Icons.get("account", 28, Color.WHITE);
                 ic.paintIcon(this, g2, (getWidth() - ic.getIconWidth()) / 2, (getHeight() - ic.getIconHeight()) / 2);
                 g2.dispose();
             }
         };
-        c.setPreferredSize(new Dimension(78, 78));
-        c.setMaximumSize(new Dimension(78, 78));
+        c.setPreferredSize(new Dimension(48, 48));
+        c.setMaximumSize(new Dimension(48, 48));
         c.setAlignmentX(Component.CENTER_ALIGNMENT);
         return c;
     }
@@ -262,8 +274,8 @@ public class LoginView extends JFrame {
         }
         panel.add(Box.createVerticalGlue());
 
-        JLabel bienvenido = new JLabel("Bienvenido a ObraTrack");
-        bienvenido.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        JLabel bienvenido = new JLabel("Cada partida cuenta.");
+        bienvenido.setFont(new Font("Segoe UI", Font.BOLD, 28));
         bienvenido.setForeground(Color.WHITE);
         bienvenido.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(bienvenido);
@@ -428,10 +440,10 @@ public class LoginView extends JFrame {
                 if (pr > ir) { dw = w; dh = (int) (w / ir); dx = 0; dy = (h - dh) / 2; }
                 else { dh = h; dw = (int) (h * ir); dy = 0; dx = (w - dw) / 2; }
                 g.drawImage(fondo, dx, dy, dw, dh, this);
-                g.setColor(new Color(0x0d, 0x1b, 0x38, 200));
+                g.setColor(new Color(0x0d, 0x1b, 0x38, 220));
                 g.fillRect(0, 0, w, h);
             } else {
-                g.setColor(Theme.BG_CARD);
+                g.setColor(Theme.SIDEBAR);
                 g.fillRect(0, 0, w, h);
             }
         }

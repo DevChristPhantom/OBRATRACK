@@ -48,10 +48,10 @@ public class DashboardView extends JPanel {
 
     private final JLabel tituloObra = new JLabel();
     private final JPanel kpiContainer = new JPanel(new GridLayout(1, 4, 16, 0));
-    private final KpiCard cardPresupuesto = new KpiCard("PRESUPUESTO TOTAL", "money", Theme.PRIMARY);
-    private final KpiCard cardEjecutado = new KpiCard("EJECUTADO HASTA HOY", "almacen", Theme.SUCCESS);
-    private final KpiCard cardDiferencia = new KpiCard("DIFERENCIA DISPONIBLE", "comparativo", Theme.PURPLE);
-    private final KpiCard cardAvance = new KpiCard("% AVANCE FINANCIERO", "partidas", Theme.WARNING);
+    private final KpiCard cardPresupuesto = new KpiCard("Presupuesto total", "money", Theme.PRIMARY);
+    private final KpiCard cardEjecutado = new KpiCard("Ejecutado a la fecha", "almacen", Theme.SUCCESS);
+    private final KpiCard cardDiferencia = new KpiCard("Saldo disponible", "comparativo", Theme.PURPLE);
+    private final KpiCard cardAvance = new KpiCard("Avance financiero", "partidas", Theme.WARNING);
 
     private final DonutChart donut = new DonutChart();
     private final BarsChart barras = new BarsChart();
@@ -85,7 +85,7 @@ public class DashboardView extends JPanel {
 
         JPanel header = new JPanel(new BorderLayout());
         header.setOpaque(false);
-        JLabel titulo = new JLabel("Dashboard");
+        JLabel titulo = new JLabel("Resumen de la obra");
         titulo.setFont(Theme.FONT_TITLE);
         titulo.setForeground(Theme.TEXT_PRIMARY);
         header.add(titulo, BorderLayout.WEST);
@@ -112,12 +112,16 @@ public class DashboardView extends JPanel {
         centro.add(topPanel, BorderLayout.NORTH);
 
         // Graficos: distribucion (dona), ejecucion acumulada (linea) y presupuesto vs ejecutado (barras)
-        JPanel graficos = new JPanel(new GridLayout(1, 3, 16, 0));
+        JPanel graficos = new JPanel(new GridLayout(1, 2, 16, 0));
+        graficos.setPreferredSize(new Dimension(10, 300));
         graficos.setOpaque(false);
         graficos.add(tarjetaChart("Distribucion del presupuesto", donut));
         graficos.add(tarjetaChart("Ejecucion acumulada vs. ritmo esperado", linea));
-        graficos.add(tarjetaChart("Presupuesto vs Ejecutado", barras));
-        centro.add(graficos, BorderLayout.CENTER);
+        JPanel bloqueGraficos = new JPanel(new BorderLayout(0, 16));
+        bloqueGraficos.setOpaque(false);
+        bloqueGraficos.add(graficos, BorderLayout.NORTH);
+        bloqueGraficos.add(tarjetaChart("Presupuesto y ejecución por grupo", barras), BorderLayout.CENTER);
+        centro.add(bloqueGraficos, BorderLayout.CENTER);
 
         // Alertas debajo de los graficos
         alertasPanel.setLayout(new BoxLayout(alertasPanel, BoxLayout.Y_AXIS));
@@ -130,8 +134,26 @@ public class DashboardView extends JPanel {
         scrollAlertas.setPreferredSize(new Dimension(10, 120));
         centro.add(scrollAlertas, BorderLayout.SOUTH);
 
-        add(centro, BorderLayout.CENTER);
+        centro.setPreferredSize(new Dimension(10, 950));
+        JScrollPane scrollContenido = new JScrollPane(centro);
+        scrollContenido.setBorder(BorderFactory.createEmptyBorder());
+        scrollContenido.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollContenido.getViewport().setBackground(Theme.BG_PRIMARY);
+        scrollContenido.getVerticalScrollBar().setUnitIncrement(28);
+        add(scrollContenido, BorderLayout.CENTER);
         spinnerTimer.setCoalesce(true);
+        addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override public void componentResized(java.awt.event.ComponentEvent e) {
+                int columnas = getWidth() < 1120 ? 2 : 4;
+                int ancho = Math.max(1, getWidth() - 48);
+                centro.setPreferredSize(new Dimension(ancho, columnas == 2 ? 1040 : 940));
+                GridLayout actual = (GridLayout) kpiContainer.getLayout();
+                if (actual.getColumns() != columnas) {
+                    kpiContainer.setLayout(new GridLayout(0, columnas, 14, 14));
+                    kpiContainer.revalidate();
+                }
+            }
+        });
     }
 
     // ============================================================
@@ -178,9 +200,7 @@ public class DashboardView extends JPanel {
     }
 
     private JPanel tarjetaChart(String titulo, JComponent chart) {
-        JPanel card = new JPanel(new BorderLayout(0, 8));
-        card.setBackground(Theme.BG_SECONDARY);
-        card.setBorder(new EmptyBorder(14, 16, 14, 16));
+        JPanel card = Theme.superficie(new BorderLayout(0, 12), 18);
         JLabel lbl = new JLabel(titulo);
         lbl.setFont(Theme.FONT_BOLD);
         lbl.setForeground(Theme.TEXT_PRIMARY);
@@ -525,10 +545,10 @@ public class DashboardView extends JPanel {
 
         KpiCard(String titulo, String iconName, Color accent) {
             setLayout(new BorderLayout(14, 0));
-            setBackground(Theme.BG_CARD);
-            setBorder(new EmptyBorder(16, 16, 16, 16));
+            setOpaque(false);
+            setBorder(new EmptyBorder(18, 18, 18, 18));
 
-            add(new IconBadge(Icons.get(iconName, 24, accent), accent), BorderLayout.WEST);
+            add(new IconBadge(Icons.get(iconName, 20, accent), accent), BorderLayout.EAST);
 
             JPanel textos = new JPanel();
             textos.setOpaque(false);
@@ -549,11 +569,16 @@ public class DashboardView extends JPanel {
             add(textos, BorderLayout.CENTER);
         }
 
+        @Override protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Theme.pintarSuperficie(g, this);
+        }
+
         /** Ajusta el tamano de fuente segun la longitud para que el monto no se corte. */
         void setValor(String texto) {
             valorLabel.setText(texto);
             int len = texto.length();
-            float size = len > 15 ? 17f : (len > 12 ? 19f : (len > 9 ? 22f : 25f));
+            float size = len > 20 ? 19f : (len > 17 ? 21f : (len > 14 ? 24f : 28f));
             valorLabel.setFont(Theme.FONT_KPI.deriveFont(Font.BOLD, size));
         }
 
@@ -649,13 +674,14 @@ public class DashboardView extends JPanel {
                 g2.setColor(gr.color);
                 g2.fillRoundRect(lx, ly - 10, 12, 12, 3, 3);
                 g2.setColor(Theme.TEXT_PRIMARY);
-                String nombre = ajustar(fm, gr.nombre, anchoLeyenda - 130);
+                String nombre = ajustar(fm, gr.nombre, anchoLeyenda - 24);
                 g2.drawString(nombre, lx + 20, ly);
                 String cifra = String.format("S/. %,.0f (%.1f%%)", gr.presupuesto, pct);
                 g2.setColor(Theme.TEXT_SECONDARY);
-                int xCifra = lx + anchoLeyenda - fm.stringWidth(cifra);
-                g2.drawString(cifra, Math.max(lx + 20, xCifra), ly);
-                ly += 26;
+                g2.setFont(Theme.FONT_SMALL);
+                g2.drawString(ajustar(g2.getFontMetrics(), cifra, anchoLeyenda - 24), lx + 20, ly + 17);
+                g2.setFont(Theme.FONT_BASE);
+                ly += 48;
                 if (ly > cy + size + 10) break;
             }
 

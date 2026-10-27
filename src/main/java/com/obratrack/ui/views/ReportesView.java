@@ -80,11 +80,15 @@ public class ReportesView extends JPanel {
         centro.add(labelMensaje);
 
         centro.add(Box.createVerticalGlue());
-        add(centro, BorderLayout.CENTER);
+        JScrollPane scroll = new JScrollPane(centro);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getViewport().setBackground(Theme.BG_PRIMARY);
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
+        add(scroll, BorderLayout.CENTER);
     }
 
     private JPanel tarjetaReporte(String titulo, String descripcion, Runnable accionExcel, Runnable accionPdf) {
-        JPanel card = new JPanel(new BorderLayout(12, 8));
+        JPanel card = Theme.superficie(new BorderLayout(12, 8), 18);
         card.setBackground(Theme.BG_SECONDARY);
         card.setBorder(new EmptyBorder(16, 18, 16, 18));
         card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 110));
@@ -116,7 +120,7 @@ public class ReportesView extends JPanel {
     }
 
     private JPanel tarjetaReporteDiario() {
-        JPanel card = new JPanel(new BorderLayout(12, 8));
+        JPanel card = Theme.superficie(new BorderLayout(12, 8), 18);
         card.setBackground(Theme.BG_SECONDARY);
         card.setBorder(new EmptyBorder(16, 18, 16, 18));
         card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 120));
