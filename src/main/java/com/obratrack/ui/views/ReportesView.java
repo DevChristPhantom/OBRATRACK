@@ -26,6 +26,8 @@ public class ReportesView extends JPanel {
     private final JLabel tituloObra = new JLabel();
     private final JTextField campoFechaDiario = new JTextField(LocalDate.now().toString());
     private final JLabel labelMensaje = new JLabel(" ");
+    private final java.util.List<JButton> botonesExportar = new java.util.ArrayList<>();
+    private boolean generando;
 
     public ReportesView(Supplier<Obra> obraActivaProvider) {
         this.obraActivaProvider = obraActivaProvider;
@@ -168,6 +170,7 @@ public class ReportesView extends JPanel {
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setPreferredSize(new Dimension(96, 34));
         btn.addActionListener(e -> accion.run());
+        botonesExportar.add(btn);
         return btn;
     }
 
@@ -184,6 +187,7 @@ public class ReportesView extends JPanel {
      * Para "diario" la fecha no puede ser null.
      */
     private void generar(String tipo, LocalDate fecha, boolean pdf) {
+        if (generando) return;
         Obra obra = obraActivaProvider.get();
         if (obra == null) {
             mostrarMensaje("Selecciona una obra activa primero.", Theme.DANGER);
@@ -194,28 +198,47 @@ public class ReportesView extends JPanel {
             return;
         }
 
-        try {
-            Path ruta;
-            if (pdf) {
-                ruta = switch (tipo) {
-                    case "comparativo" -> reportePdf.exportarComparativoPdf(obra);
-                    case "diario" -> reportePdf.exportarMovimientosPdf(obra, fecha);
-                    case "resumen_ejecutivo" -> reportePdf.exportarResumenEjecutivoPdf(obra);
-                    default -> reportePdf.exportarMovimientosPdf(obra, null);
-                };
-            } else {
-                ruta = switch (tipo) {
-                    case "comparativo" -> reporteExcel.exportarComparativoExcel(obra);
-                    case "diario" -> reporteExcel.exportarMovimientosExcel(obra, fecha);
-                    case "resumen_ejecutivo" -> reporteExcel.exportarResumenEjecutivoExcel(obra);
-                    default -> reporteExcel.exportarMovimientosExcel(obra, null);
-                };
+        generando = true;
+        botonesExportar.forEach(boton -> boton.setEnabled(false));
+        mostrarMensaje("Generando reporte de " + obra.getNombre() + "...", Theme.TEXT_SECONDARY);
+        new SwingWorker<Path, Void>() {
+            @Override
+            protected Path doInBackground() throws Exception {
+                Path ruta;
+                if (pdf) {
+                    ruta = switch (tipo) {
+                        case "comparativo" -> reportePdf.exportarComparativoPdf(obra);
+                        case "diario" -> reportePdf.exportarMovimientosPdf(obra, fecha);
+                        case "resumen_ejecutivo" -> reportePdf.exportarResumenEjecutivoPdf(obra);
+                        default -> reportePdf.exportarMovimientosPdf(obra, null);
+                    };
+                } else {
+                    ruta = switch (tipo) {
+                        case "comparativo" -> reporteExcel.exportarComparativoExcel(obra);
+                        case "diario" -> reporteExcel.exportarMovimientosExcel(obra, fecha);
+                        case "resumen_ejecutivo" -> reporteExcel.exportarResumenEjecutivoExcel(obra);
+                        default -> reporteExcel.exportarMovimientosExcel(obra, null);
+                    };
+                }
+                abrirArchivo(ruta.toFile());
+                return ruta;
             }
-            mostrarMensaje("Reporte generado: " + ruta.toAbsolutePath(), Theme.SUCCESS);
-            abrirArchivo(ruta.toFile());
-        } catch (Exception e) {
-            mostrarMensaje("No se pudo generar el reporte: " + e.getMessage(), Theme.DANGER);
-        }
+
+            @Override
+            protected void done() {
+                try {
+                    mostrarMensaje("Reporte generado: " + get().toAbsolutePath(), Theme.SUCCESS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    mostrarMensaje("Se interrumpio la generacion del reporte.", Theme.DANGER);
+                } catch (java.util.concurrent.ExecutionException e) {
+                    mostrarMensaje("No se pudo generar el reporte: " + e.getCause().getMessage(), Theme.DANGER);
+                } finally {
+                    generando = false;
+                    botonesExportar.forEach(boton -> boton.setEnabled(true));
+                }
+            }
+        }.execute();
     }
 
     private void abrirArchivo(File archivo) {

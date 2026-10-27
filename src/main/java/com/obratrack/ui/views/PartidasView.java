@@ -11,7 +11,8 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.sql.SQLException;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -20,11 +21,15 @@ import java.util.function.Supplier;
 /** Tabla de partidas de la obra activa: presupuestado vs ejecutado, con color segun avance. */
 public class PartidasView extends JPanel {
 
-    private final IPartidaService partidaService = ServiceFactory.partida();
-    private final IMovimientoService movimientoService = ServiceFactory.movimiento();
+    private final IPartidaService partidaService;
+    private final IMovimientoService movimientoService;
     private final Supplier<Obra> obraActivaProvider;
 
     private final JLabel tituloObra = new JLabel();
+    private SwingWorker<DatosPartidas, Void> carga;
+    private int versionCarga;
+    private final JTextField campoBusqueda = new JTextField(22);
+    private final JButton botonExportar = new JButton("Exportar a Excel");
     private final DefaultTableModel tablaModelo;
     private final JTable tabla;
 
@@ -38,6 +43,12 @@ public class PartidasView extends JPanel {
     };
 
     public PartidasView(Supplier<Obra> obraActivaProvider) {
+        this(obraActivaProvider, ServiceFactory.partida(), ServiceFactory.movimiento());
+    }
+
+    PartidasView(Supplier<Obra> obraActivaProvider, IPartidaService partidas, IMovimientoService movimientos) {
+        this.partidaService = partidas;
+        this.movimientoService = movimientos;
         this.obraActivaProvider = obraActivaProvider;
         setLayout(new BorderLayout(0, 14));
         setBackground(Theme.BG_PRIMARY);
@@ -108,12 +119,67 @@ public class PartidasView extends JPanel {
         btnDetalle.setToolTipText("Doble clic en una partida tambien abre su detalle");
         btnDetalle.addActionListener(e -> abrirDetalleSeleccionada());
         barra.add(btnDetalle);
+        barra.add(new JLabel("Buscar:"));
+        campoBusqueda.setToolTipText("Busca por codigo o descripcion de partida");
+        campoBusqueda.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { filtrarPartidas(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { filtrarPartidas(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { filtrarPartidas(); }
+        });
+        barra.add(campoBusqueda);
+        botonExportar.setFont(Theme.FONT_BASE);
+        botonExportar.addActionListener(e -> exportarPartidas());
+        barra.add(botonExportar);
 
         JPanel centro = new JPanel(new BorderLayout(0, 8));
         centro.setOpaque(false);
         centro.add(barra, BorderLayout.NORTH);
         centro.add(new JScrollPane(tabla), BorderLayout.CENTER);
         add(centro, BorderLayout.CENTER);
+    }
+
+    private void filtrarPartidas() {
+        String texto = campoBusqueda.getText().trim();
+        @SuppressWarnings("unchecked")
+        javax.swing.table.TableRowSorter<DefaultTableModel> sorter =
+                (javax.swing.table.TableRowSorter<DefaultTableModel>) tabla.getRowSorter();
+        sorter.setRowFilter(texto.isEmpty() ? null : RowFilter.regexFilter(
+                "(?iu)" + java.util.regex.Pattern.quote(texto), 0, 1));
+    }
+
+    private void exportarPartidas() {
+        Obra obra = obraActivaProvider.get();
+        if (obra == null) {
+            JOptionPane.showMessageDialog(this, "Selecciona una obra activa primero.");
+            return;
+        }
+        botonExportar.setEnabled(false);
+        botonExportar.setText("Exportando...");
+        new SwingWorker<java.nio.file.Path, Void>() {
+            @Override
+            protected java.nio.file.Path doInBackground() throws Exception {
+                return ServiceFactory.reporteExcel().exportarComparativoExcel(obra);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    java.nio.file.Path archivo = get();
+                    JOptionPane.showMessageDialog(PartidasView.this,
+                            "Partidas de " + obra.getNombre() + " exportadas a:\n" + archivo.toAbsolutePath(),
+                            "Exportacion completada", JOptionPane.INFORMATION_MESSAGE);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException e) {
+                    JOptionPane.showMessageDialog(PartidasView.this,
+                            "No se pudieron exportar las partidas: " + e.getCause().getMessage(),
+                            "Error", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    botonExportar.setEnabled(true);
+                    botonExportar.setText("Exportar a Excel");
+                }
+            }
+        }.execute();
     }
 
     /** Abre el dialogo de metrados/APU para la partida seleccionada (solo partidas hoja, no secciones). */
@@ -157,7 +223,7 @@ public class PartidasView extends JPanel {
         FontMetrics fmBase = tabla.getFontMetrics(Theme.FONT_BASE);
         FontMetrics fmBold = tabla.getFontMetrics(Theme.FONT_BOLD);
         int ancho = minimo;
-        for (int r = 0; r < tabla.getRowCount(); r++) {
+        for (int r = 0; r < tablaModelo.getRowCount(); r++) {
             Object v = tablaModelo.getValueAt(r, columna);
             if (v == null) continue;
             boolean separador = r < esSeparadorPorFila.size() && esSeparadorPorFila.get(r);
@@ -172,54 +238,78 @@ public class PartidasView extends JPanel {
         return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
+    private record DatosPartidas(List<Partida> partidas, Object[][] filas) {}
+
     public void refrescar() {
+        int version = ++versionCarga;
+        if (carga != null) carga.cancel(true);
         Obra obra = obraActivaProvider.get();
-        tablaModelo.setRowCount(0);
         esSeparadorPorFila.clear();
         nivelPorFila.clear();
         partidaPorFila.clear();
-
+        tablaModelo.setRowCount(0);
         if (obra == null) {
             tituloObra.setText("Selecciona una obra activa para ver sus partidas");
             return;
         }
-        tituloObra.setText("Obra: " + obra.getNombre());
-
-        try {
-            List<Partida> partidas = partidaService.listarPorObra(obra.getId());
-            Map<Long, Double> ejecutadoPorPartida = movimientoService.totalEjecutadoPorPartida(obra.getId());
-
-            for (Partida p : partidas) {
-                // Ejecutado: para una partida hoja es su propio ejecutado; para un separador
-                // (seccion) es la suma del ejecutado de todas sus partidas hijas.
-                double ejecutado = p.isEsPadre()
-                        ? ejecutadoDeSeccion(p, partidas, ejecutadoPorPartida)
-                        : ejecutadoPorPartida.getOrDefault(p.getId(), 0.0);
-                double presupuestado = p.getCostoTotalPresupuestado(); // en separadores = subtotal (roll-up)
-                double diferencia = presupuestado - ejecutado;
-                double pctAvance = presupuestado > 0 ? (ejecutado / presupuestado) * 100 : 0;
-
-                // Los separadores tambien muestran su subtotal; solo se deja en blanco si no hay monto.
-                boolean sinMonto = presupuestado == 0 && ejecutado == 0;
-
-                tablaModelo.addRow(new Object[]{
-                        p.getCodigo() != null ? p.getCodigo() : "",
-                        sangria(p) + p.getDescripcion(),
-                        p.getUnidad() != null ? p.getUnidad() : "",
-                        sinMonto ? "" : String.format("%,.2f", presupuestado),
-                        sinMonto ? "" : String.format("%,.2f", ejecutado),
-                        sinMonto ? "" : String.format("%,.2f", diferencia),
-                        (sinMonto || presupuestado == 0) ? "" : String.format("%.1f%%", pctAvance)
-                });
-                esSeparadorPorFila.add(p.isEsPadre());
-                nivelPorFila.add(Math.max(1, p.getNivel()));
-                partidaPorFila.add(p);
+        tituloObra.setText("Cargando partidas de " + obra.getNombre() + "...");
+        carga = new SwingWorker<>() {
+            @Override
+            protected DatosPartidas doInBackground() throws Exception {
+                List<Partida> partidas = partidaService.listarPorObra(obra.getId());
+                Map<Long, Double> ejecutadoPorPartida = movimientoService.totalEjecutadoPorPartida(obra.getId());
+                Object[][] filas = new Object[partidas.size()][];
+                for (int i = 0; i < partidas.size(); i++) {
+                    if (isCancelled()) return null;
+                    Partida p = partidas.get(i);
+                    double ejecutado = p.isEsPadre()
+                            ? ejecutadoDeSeccion(p, partidas, ejecutadoPorPartida)
+                            : ejecutadoPorPartida.getOrDefault(p.getId(), 0.0);
+                    double presupuestado = p.getCostoTotalPresupuestado();
+                    double diferencia = presupuestado - ejecutado;
+                    double pctAvance = presupuestado > 0 ? ejecutado / presupuestado * 100 : 0;
+                    boolean sinMonto = presupuestado == 0 && ejecutado == 0;
+                    filas[i] = new Object[]{
+                            p.getCodigo() != null ? p.getCodigo() : "",
+                            sangria(p) + p.getDescripcion(),
+                            p.getUnidad() != null ? p.getUnidad() : "",
+                            sinMonto ? "" : String.format("%,.2f", presupuestado),
+                            sinMonto ? "" : String.format("%,.2f", ejecutado),
+                            sinMonto ? "" : String.format("%,.2f", diferencia),
+                            (sinMonto || presupuestado == 0) ? "" : String.format("%.1f%%", pctAvance)
+                    };
+                }
+                return new DatosPartidas(partidas, filas);
             }
-            ajustarAnchosColumnas();
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this, "No se pudieron cargar las partidas: " + e.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
-        }
+
+            @Override
+            protected void done() {
+                if (version != versionCarga || isCancelled()) return;
+                try {
+                    DatosPartidas datos = get();
+                    for (Partida p : datos.partidas()) {
+                        esSeparadorPorFila.add(p.isEsPadre());
+                        nivelPorFila.add(Math.max(1, p.getNivel()));
+                        partidaPorFila.add(p);
+                    }
+                    // Un solo evento evita ordenar y repintar por cada fila importada.
+                    tablaModelo.setDataVector(datos.filas(), COLUMNAS);
+                    filtrarPartidas();
+                    ajustarAnchosColumnas();
+                    tituloObra.setText("Obra: " + obra.getNombre() + " · " + datos.partidas().size() + " partidas");
+                } catch (CancellationException ignored) {
+                    // Una seleccion mas reciente reemplazo esta carga.
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException e) {
+                    tituloObra.setText("No se pudieron cargar las partidas");
+                    JOptionPane.showMessageDialog(PartidasView.this,
+                            "No se pudieron cargar las partidas: " + e.getCause().getMessage(),
+                            "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        };
+        carga.execute();
     }
 
     private String sangria(Partida p) {
