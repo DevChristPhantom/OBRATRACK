@@ -28,6 +28,8 @@ public class PartidasView extends JPanel {
     private final JLabel tituloObra = new JLabel();
     private SwingWorker<DatosPartidas, Void> carga;
     private int versionCarga;
+    private final JTextField campoBusqueda = new JTextField(22);
+    private final JButton botonExportar = new JButton("Exportar a Excel");
     private final DefaultTableModel tablaModelo;
     private final JTable tabla;
 
@@ -117,12 +119,67 @@ public class PartidasView extends JPanel {
         btnDetalle.setToolTipText("Doble clic en una partida tambien abre su detalle");
         btnDetalle.addActionListener(e -> abrirDetalleSeleccionada());
         barra.add(btnDetalle);
+        barra.add(new JLabel("Buscar:"));
+        campoBusqueda.setToolTipText("Busca por codigo o descripcion de partida");
+        campoBusqueda.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { filtrarPartidas(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { filtrarPartidas(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { filtrarPartidas(); }
+        });
+        barra.add(campoBusqueda);
+        botonExportar.setFont(Theme.FONT_BASE);
+        botonExportar.addActionListener(e -> exportarPartidas());
+        barra.add(botonExportar);
 
         JPanel centro = new JPanel(new BorderLayout(0, 8));
         centro.setOpaque(false);
         centro.add(barra, BorderLayout.NORTH);
         centro.add(new JScrollPane(tabla), BorderLayout.CENTER);
         add(centro, BorderLayout.CENTER);
+    }
+
+    private void filtrarPartidas() {
+        String texto = campoBusqueda.getText().trim();
+        @SuppressWarnings("unchecked")
+        javax.swing.table.TableRowSorter<DefaultTableModel> sorter =
+                (javax.swing.table.TableRowSorter<DefaultTableModel>) tabla.getRowSorter();
+        sorter.setRowFilter(texto.isEmpty() ? null : RowFilter.regexFilter(
+                "(?iu)" + java.util.regex.Pattern.quote(texto), 0, 1));
+    }
+
+    private void exportarPartidas() {
+        Obra obra = obraActivaProvider.get();
+        if (obra == null) {
+            JOptionPane.showMessageDialog(this, "Selecciona una obra activa primero.");
+            return;
+        }
+        botonExportar.setEnabled(false);
+        botonExportar.setText("Exportando...");
+        new SwingWorker<java.nio.file.Path, Void>() {
+            @Override
+            protected java.nio.file.Path doInBackground() throws Exception {
+                return ServiceFactory.reporteExcel().exportarComparativoExcel(obra);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    java.nio.file.Path archivo = get();
+                    JOptionPane.showMessageDialog(PartidasView.this,
+                            "Partidas de " + obra.getNombre() + " exportadas a:\n" + archivo.toAbsolutePath(),
+                            "Exportacion completada", JOptionPane.INFORMATION_MESSAGE);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException e) {
+                    JOptionPane.showMessageDialog(PartidasView.this,
+                            "No se pudieron exportar las partidas: " + e.getCause().getMessage(),
+                            "Error", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    botonExportar.setEnabled(true);
+                    botonExportar.setText("Exportar a Excel");
+                }
+            }
+        }.execute();
     }
 
     /** Abre el dialogo de metrados/APU para la partida seleccionada (solo partidas hoja, no secciones). */
@@ -166,7 +223,7 @@ public class PartidasView extends JPanel {
         FontMetrics fmBase = tabla.getFontMetrics(Theme.FONT_BASE);
         FontMetrics fmBold = tabla.getFontMetrics(Theme.FONT_BOLD);
         int ancho = minimo;
-        for (int r = 0; r < tabla.getRowCount(); r++) {
+        for (int r = 0; r < tablaModelo.getRowCount(); r++) {
             Object v = tablaModelo.getValueAt(r, columna);
             if (v == null) continue;
             boolean separador = r < esSeparadorPorFila.size() && esSeparadorPorFila.get(r);
@@ -237,6 +294,7 @@ public class PartidasView extends JPanel {
                     }
                     // Un solo evento evita ordenar y repintar por cada fila importada.
                     tablaModelo.setDataVector(datos.filas(), COLUMNAS);
+                    filtrarPartidas();
                     ajustarAnchosColumnas();
                     tituloObra.setText("Obra: " + obra.getNombre() + " · " + datos.partidas().size() + " partidas");
                 } catch (CancellationException ignored) {

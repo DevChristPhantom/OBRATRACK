@@ -77,11 +77,33 @@ class PartidasViewTest {
             if (!quitarObra) assertTrue(publicada.await(5, TimeUnit.SECONDS));
             SwingUtilities.invokeAndWait(() -> {
                 assertEquals(quitarObra ? 0 : 1, tabla.get().getRowCount());
-                if (!quitarObra) assertTrue(tabla.get().getValueAt(0, 1).toString().contains("Concreto"));
+                if (!quitarObra) {
+                    assertTrue(tabla.get().getValueAt(0, 1).toString().contains("Concreto"));
+                    JTextField filtro = buscarCampo(vista.get());
+                    filtro.setText("CONCRETO");
+                    assertEquals(1, tabla.get().getRowCount());
+                    filtro.setText("[");
+                    assertEquals(0, tabla.get().getRowCount());
+                    filtro.setText("01.01");
+                    assertEquals(1, tabla.get().getRowCount());
+                    filtro.setText("");
+                    assertEquals(1, tabla.get().getRowCount());
+                }
             });
         } finally {
             liberar.countDown();
         }
+    }
+
+    private JTextField buscarCampo(Container contenedor) {
+        for (Component c : contenedor.getComponents()) {
+            if (c instanceof JTextField t) return t;
+            if (c instanceof Container hijo) {
+                JTextField t = buscarCampo(hijo);
+                if (t != null) return t;
+            }
+        }
+        return null;
     }
 
     private JTable buscarTabla(Container contenedor) {
