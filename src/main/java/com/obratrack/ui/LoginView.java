@@ -261,6 +261,9 @@ public class LoginView extends JFrame {
         panel.setBorder(new EmptyBorder(48, 40, 48, 40));
 
         JLabel logoImg = new JLabel();
+        logoImg.setOpaque(true);
+        logoImg.setBackground(Color.WHITE);
+        logoImg.setBorder(new EmptyBorder(10, 14, 10, 14));
         logoImg.setAlignmentX(Component.CENTER_ALIGNMENT);
         URL url = getClass().getResource("/img/logoTitan.png");
         if (url != null) {
