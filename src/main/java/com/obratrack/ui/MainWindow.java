@@ -88,7 +88,6 @@ public final class MainWindow extends JFrame {
         getContentPane().add(contenido, BorderLayout.CENTER);
         getContentPane().add(construirBarraEstado(), BorderLayout.SOUTH);
 
-        construirVistas();
         cargarObrasEnCombo();
         registrarAtajos();
         listo = true;
@@ -373,41 +372,105 @@ public final class MainWindow extends JFrame {
         return card;
     }
 
-    private void construirVistas() {
-        dashboardView = new DashboardView(this::obtenerObraActiva);
-        obrasView = new ObrasView(this::onObraCreada, this::onObrasModificadas);
-        partidasView = new PartidasView(this::obtenerObraActiva);
-        cronogramaView = new CronogramaView(this::obtenerObraActiva);
-        cuadernoView = new CuadernoView(this::obtenerObraActiva);
-        documentosView = new DocumentosView(this::obtenerObraActiva);
-        cumplimientoView = new CumplimientoView(this::obtenerObraActiva);
-        almacenView = new AlmacenView(this::obtenerObraActiva, this::refrescarVistaActual);
-        valorizacionesView = new ValorizacionesView(this::obtenerObraActiva);
-        presupuestoAnaliticoView = new PresupuestoAnaliticoView(this::obtenerObraActiva);
-        formulaPolinomicaView = new FormulaPolinomicaView(this::obtenerObraActiva);
-        comparativoView = new ComparativoView(this::obtenerObraActiva);
-        reportesView = new ReportesView(this::obtenerObraActiva);
-        usuariosView = new UsuariosView();
-        ajustesView = new AjustesView();
-
-        contenido.add(dashboardView, "dashboard");
-        contenido.add(obrasView, "obras");
-        contenido.add(partidasView, "partidas");
-        contenido.add(cronogramaView, "cronograma");
-        contenido.add(cuadernoView, "cuaderno");
-        contenido.add(documentosView, "documentos");
-        contenido.add(cumplimientoView, "cumplimiento");
-        contenido.add(almacenView, "almacen");
-        contenido.add(valorizacionesView, "valorizaciones");
-        contenido.add(presupuestoAnaliticoView, "presupuesto_analitico");
-        contenido.add(formulaPolinomicaView, "formula");
-        contenido.add(comparativoView, "comparativo");
-        contenido.add(reportesView, "reportes");
-        contenido.add(usuariosView, "usuarios");
-        contenido.add(ajustesView, "ajustes");
+    /** Construye cada pantalla una sola vez, cuando se abre por primera vez. */
+    private void asegurarVista(String nombre) {
+        switch (nombre) {
+            case "dashboard" -> {
+                if (dashboardView == null) {
+                    dashboardView = new DashboardView(this::obtenerObraActiva);
+                    contenido.add(dashboardView, nombre);
+                }
+            }
+            case "obras" -> {
+                if (obrasView == null) {
+                    obrasView = new ObrasView(this::onObraCreada, this::onObrasModificadas);
+                    contenido.add(obrasView, nombre);
+                }
+            }
+            case "partidas" -> {
+                if (partidasView == null) {
+                    partidasView = new PartidasView(this::obtenerObraActiva);
+                    contenido.add(partidasView, nombre);
+                }
+            }
+            case "cronograma" -> {
+                if (cronogramaView == null) {
+                    cronogramaView = new CronogramaView(this::obtenerObraActiva);
+                    contenido.add(cronogramaView, nombre);
+                }
+            }
+            case "cuaderno" -> {
+                if (cuadernoView == null) {
+                    cuadernoView = new CuadernoView(this::obtenerObraActiva);
+                    contenido.add(cuadernoView, nombre);
+                }
+            }
+            case "documentos" -> {
+                if (documentosView == null) {
+                    documentosView = new DocumentosView(this::obtenerObraActiva);
+                    contenido.add(documentosView, nombre);
+                }
+            }
+            case "cumplimiento" -> {
+                if (cumplimientoView == null) {
+                    cumplimientoView = new CumplimientoView(this::obtenerObraActiva);
+                    contenido.add(cumplimientoView, nombre);
+                }
+            }
+            case "almacen" -> {
+                if (almacenView == null) {
+                    almacenView = new AlmacenView(this::obtenerObraActiva, this::refrescarVistaActual);
+                    contenido.add(almacenView, nombre);
+                }
+            }
+            case "valorizaciones" -> {
+                if (valorizacionesView == null) {
+                    valorizacionesView = new ValorizacionesView(this::obtenerObraActiva);
+                    contenido.add(valorizacionesView, nombre);
+                }
+            }
+            case "presupuesto_analitico" -> {
+                if (presupuestoAnaliticoView == null) {
+                    presupuestoAnaliticoView = new PresupuestoAnaliticoView(this::obtenerObraActiva);
+                    contenido.add(presupuestoAnaliticoView, nombre);
+                }
+            }
+            case "formula" -> {
+                if (formulaPolinomicaView == null) {
+                    formulaPolinomicaView = new FormulaPolinomicaView(this::obtenerObraActiva);
+                    contenido.add(formulaPolinomicaView, nombre);
+                }
+            }
+            case "comparativo" -> {
+                if (comparativoView == null) {
+                    comparativoView = new ComparativoView(this::obtenerObraActiva);
+                    contenido.add(comparativoView, nombre);
+                }
+            }
+            case "reportes" -> {
+                if (reportesView == null) {
+                    reportesView = new ReportesView(this::obtenerObraActiva);
+                    contenido.add(reportesView, nombre);
+                }
+            }
+            case "usuarios" -> {
+                if (usuariosView == null) {
+                    usuariosView = new UsuariosView();
+                    contenido.add(usuariosView, nombre);
+                }
+            }
+            case "ajustes" -> {
+                if (ajustesView == null) {
+                    ajustesView = new AjustesView();
+                    contenido.add(ajustesView, nombre);
+                }
+            }
+            default -> throw new IllegalArgumentException("Vista desconocida: " + nombre);
+        }
     }
 
     public void mostrarVista(String nombre) {
+        asegurarVista(nombre);
         vistaActual = nombre;
         cardLayout.show(contenido, nombre);
         resaltarNavActivo();
@@ -433,6 +496,7 @@ public final class MainWindow extends JFrame {
      * Las demas vistas se actualizan de forma perezosa cuando se muestran.
      */
     private void refrescarVistaActual() {
+        asegurarVista(vistaActual);
         switch (vistaActual) {
             case "dashboard" -> dashboardView.refrescar();
             case "partidas" -> partidasView.refrescar();

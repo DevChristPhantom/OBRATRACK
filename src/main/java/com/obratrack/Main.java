@@ -55,24 +55,62 @@ public class Main {
 
     /** Continua el arranque una vez decidido (o cargado) el modo de red. */
     private static void continuarArranque(Logger log) {
-        try {
-            if (RedEstado.modo() != Modo.CLIENTE) {
-                Database.get();                              // crea/migra el esquema al iniciar
-                RespaldoDB.respaldarAlIniciar();              // copia de seguridad automatica
-                ServiceFactory.usuario().sembrarAdminSiVacio(); // admin/admin123 en el primer arranque
+        JFrame progreso = new JFrame("Iniciando ObraTrack");
+        progreso.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+        JPanel panel = new JPanel(new java.awt.BorderLayout(0, 12));
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 24, 20, 24));
+        JLabel estado = new JLabel("Preparando la aplicacion...");
+        JProgressBar barra = new JProgressBar();
+        barra.setIndeterminate(true);
+        panel.add(estado, java.awt.BorderLayout.NORTH);
+        panel.add(barra, java.awt.BorderLayout.CENTER);
+        progreso.setContentPane(panel);
+        progreso.pack();
+        progreso.setLocationRelativeTo(null);
+        progreso.setVisible(true);
+
+        new SwingWorker<Void, String>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                if (RedEstado.modo() != Modo.CLIENTE) {
+                    publish("Preparando la base de datos...");
+                    Database.get();
+                    publish("Creando respaldo de seguridad...");
+                    RespaldoDB.respaldarAlIniciar();
+                    publish("Preparando usuarios...");
+                    ServiceFactory.usuario().sembrarAdminSiVacio();
+                }
+                if (RedEstado.modo() == Modo.ANFITRIONA) {
+                    publish("Iniciando servidor de la obra...");
+                    servidor = new ServidorHttp();
+                    servidor.iniciar(RedEstado.puerto());
+                }
+                return null;
             }
-            if (RedEstado.modo() == Modo.ANFITRIONA) {
-                servidor = new ServidorHttp();
-                servidor.iniciar(RedEstado.puerto());
+
+            @Override
+            protected void process(java.util.List<String> mensajes) {
+                estado.setText(mensajes.get(mensajes.size() - 1));
+                progreso.pack();
             }
-            new LoginView(Main::abrirPrincipal).setVisible(true);
-        } catch (Exception e) {
-            log.log(Level.SEVERE, "No se pudo iniciar la aplicacion", e);
-            JOptionPane.showMessageDialog(null,
-                    "No se pudo iniciar ObraTrack.\n\nDetalle: " + e.getMessage(),
-                    "Error fatal", JOptionPane.ERROR_MESSAGE);
-            System.exit(1);
-        }
+
+            @Override
+            protected void done() {
+                try {
+                    get();
+                    new LoginView(Main::abrirPrincipal).setVisible(true);
+                } catch (Exception e) {
+                    Throwable causa = e.getCause() != null ? e.getCause() : e;
+                    log.log(Level.SEVERE, "No se pudo iniciar la aplicacion", causa);
+                    JOptionPane.showMessageDialog(progreso,
+                            "No se pudo iniciar ObraTrack.\n\nDetalle: " + causa.getMessage(),
+                            "Error fatal", JOptionPane.ERROR_MESSAGE);
+                    System.exit(1);
+                } finally {
+                    progreso.dispose();
+                }
+            }
+        }.execute();
     }
 
     /** Abre la ventana principal tras un login correcto. */
