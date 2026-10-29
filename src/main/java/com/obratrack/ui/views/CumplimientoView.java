@@ -59,6 +59,7 @@ public class CumplimientoView extends JPanel {
         tabs.addTab("Compromisos Ambientales", new CategoriaPanel(Categoria.AMBIENTAL));
         tabs.addTab("Control de Calidad", new CategoriaPanel(Categoria.CALIDAD));
         tabs.addTab("Seguridad y Salud (SST)", new CategoriaPanel(Categoria.SST));
+        tabs.addChangeListener(e -> cargarPestanaActual());
         add(tabs, BorderLayout.CENTER);
     }
 
@@ -66,8 +67,13 @@ public class CumplimientoView extends JPanel {
         Obra obra = obraActivaProvider.get();
         tituloObra.setText(obra != null ? "Obra: " + obra.getNombre() : "Selecciona una obra activa");
         for (Component c : tabs.getComponents()) {
-            if (c instanceof CategoriaPanel p) p.cargar();
+            if (c instanceof CategoriaPanel p) p.cancelarCarga();
         }
+        cargarPestanaActual();
+    }
+
+    private void cargarPestanaActual() {
+        if (tabs.getSelectedComponent() instanceof CategoriaPanel p) p.cargar();
     }
 
     // ============================================================
@@ -75,6 +81,7 @@ public class CumplimientoView extends JPanel {
     // ============================================================
 
     private class CategoriaPanel extends JPanel {
+        private final com.obratrack.ui.CargaVista carga = new com.obratrack.ui.CargaVista(this);
         private final Categoria categoria;
         private final ICumplimientoService cumplimientoService = ServiceFactory.cumplimiento();
         private final IPartidaService partidaService = ServiceFactory.partida();
@@ -147,13 +154,21 @@ public class CumplimientoView extends JPanel {
             add(new JScrollPane(tabla), BorderLayout.CENTER);
         }
 
+        void cancelarCarga() {
+            carga.cancelar();
+            modelo.setRowCount(0);
+            actuales.clear();
+            resumen.setText("");
+        }
+
         void cargar() {
+        carga.cancelar();
             modelo.setRowCount(0);
             actuales.clear();
             Obra obra = obraActivaProvider.get();
             if (obra == null) { resumen.setText(""); return; }
-            try {
-                List<ItemCumplimiento> items = cumplimientoService.listarPorObra(obra.getId(), categoria);
+            carga.ejecutar(() -> cumplimientoService.listarPorObra(obra.getId(), categoria), items -> {
+
                 actuales.addAll(items);
                 LocalDate hoy = LocalDate.now();
                 for (ItemCumplimiento i : items) {
@@ -171,9 +186,9 @@ public class CumplimientoView extends JPanel {
                 long vencidos = CumplimientoCalculo.conteoVencidos(items, hoy);
                 resumen.setForeground(vencidos > 0 ? Theme.DANGER : Theme.TEXT_SECONDARY);
                 resumen.setText(String.format("%d en total   ·   %d abiertos   ·   %d vencidos", items.size(), abiertos, vencidos));
-            } catch (SQLException e) {
+            }, e -> {
                 mostrarError("No se pudo cargar: " + e.getMessage());
-            }
+            });
         }
 
         private ItemCumplimiento seleccionado() {

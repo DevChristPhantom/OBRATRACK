@@ -29,6 +29,7 @@ import java.util.function.Supplier;
 public class ValorizacionesView extends JPanel {
 
     private final IValorizacionService valorizacionService = ServiceFactory.valorizacion();
+    private final com.obratrack.ui.CargaVista carga = new com.obratrack.ui.CargaVista(this);
     private final Supplier<Obra> obraActivaProvider;
 
     private final JLabel tituloObra = new JLabel();
@@ -125,6 +126,7 @@ public class ValorizacionesView extends JPanel {
     // ============================================================
 
     public void refrescar() {
+        carga.cancelar();
         Obra obra = obraActivaProvider.get();
         tablaModelo.setRowCount(0);
         valorizacionesActuales.clear();
@@ -136,8 +138,8 @@ public class ValorizacionesView extends JPanel {
         }
         tituloObra.setText("Obra: " + obra.getNombre());
 
-        try {
-            List<Valorizacion> valorizaciones = valorizacionService.listarPorObra(obra.getId());
+        carga.ejecutar(() -> valorizacionService.listarPorObra(obra.getId()), valorizaciones -> {
+
             valorizacionesActuales.addAll(valorizaciones);
 
             for (Valorizacion v : valorizaciones) {
@@ -155,10 +157,10 @@ public class ValorizacionesView extends JPanel {
             }
 
             actualizarResumen(obra, valorizaciones);
-        } catch (SQLException e) {
+        }, e -> {
             JOptionPane.showMessageDialog(this, "No se pudieron cargar las valorizaciones: " + e.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
-        }
+        });
     }
 
     private void actualizarResumen(Obra obra, List<Valorizacion> valorizaciones) {

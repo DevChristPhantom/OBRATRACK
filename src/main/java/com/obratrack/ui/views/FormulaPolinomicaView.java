@@ -28,6 +28,7 @@ import java.util.function.Supplier;
 public class FormulaPolinomicaView extends JPanel {
 
     private final IFormulaPolinomicaService formulaService = ServiceFactory.formulaPolinomica();
+    private final com.obratrack.ui.CargaVista carga = new com.obratrack.ui.CargaVista(this);
     private final Supplier<Obra> obraActivaProvider;
 
     private final JLabel tituloObra = new JLabel();
@@ -145,6 +146,7 @@ public class FormulaPolinomicaView extends JPanel {
     // ============================================================
 
     public void refrescar() {
+        carga.cancelar();
         Obra obra = obraActivaProvider.get();
         modelo.setRowCount(0);
         actuales.clear();
@@ -157,8 +159,8 @@ public class FormulaPolinomicaView extends JPanel {
         }
         tituloObra.setText("Obra: " + obra.getNombre());
 
-        try {
-            List<MonomioPolinomico> monomios = formulaService.listarPorObra(obra.getId());
+        carga.ejecutar(() -> formulaService.listarPorObra(obra.getId()), monomios -> {
+
             actuales.addAll(monomios);
             for (MonomioPolinomico m : monomios) {
                 modelo.addRow(new Object[]{
@@ -169,9 +171,9 @@ public class FormulaPolinomicaView extends JPanel {
                 });
             }
             actualizarResumenCoeficientes(monomios);
-        } catch (SQLException e) {
+        }, e -> {
             mostrarError("No se pudo cargar la formula polinomica: " + e.getMessage());
-        }
+        });
     }
 
     private void actualizarResumenCoeficientes(List<MonomioPolinomico> monomios) {
