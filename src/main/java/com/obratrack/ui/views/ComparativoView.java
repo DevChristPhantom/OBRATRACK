@@ -30,7 +30,7 @@ import java.util.function.Supplier;
 public class ComparativoView extends JPanel {
 
     private final Supplier<Obra> obraActivaProvider;
-    private final IMovimientoService movimientoService = ServiceFactory.movimiento();
+    private final IMovimientoService movimientoService;
     private final IReporteService reporteExcel = ServiceFactory.reporteExcel();
     private final IReportePdf reportePdf = ServiceFactory.reportePdf();
 
@@ -40,6 +40,10 @@ public class ComparativoView extends JPanel {
     private final JLabel labelMensaje = new JLabel(" ");
     private final DefaultTableModel tablaModelo;
     private final JTable tabla;
+    private SwingWorker<DatosComparativo, Void> carga;
+    private int versionCarga;
+    private boolean exportando;
+    private final java.util.List<JButton> botonesExportar = new java.util.ArrayList<>();
 
     private static final String[] COLUMNAS = {
             "Periodo", "Desde", "Hasta", "N° Mov.", "Egresos (S/.)",
@@ -47,6 +51,11 @@ public class ComparativoView extends JPanel {
     };
 
     public ComparativoView(Supplier<Obra> obraActivaProvider) {
+        this(obraActivaProvider, ServiceFactory.movimiento());
+    }
+
+    ComparativoView(Supplier<Obra> obraActivaProvider, IMovimientoService movimientos) {
+        this.movimientoService = movimientos;
         this.obraActivaProvider = obraActivaProvider;
         setLayout(new BorderLayout(0, 14));
         setBackground(Theme.BG_PRIMARY);
@@ -123,6 +132,7 @@ public class ComparativoView extends JPanel {
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setPreferredSize(new Dimension(150, 32));
         btn.addActionListener(e -> accion.run());
+        botonesExportar.add(btn);
         return btn;
     }
 
@@ -136,79 +146,95 @@ public class ComparativoView extends JPanel {
         cargarDatos();
     }
 
+    private record DatosComparativo(Object[][] filas, String resumen, boolean vacio) {}
+
     private void cargarDatos() {
+        int version = ++versionCarga;
+        if (carga != null) carga.cancel(true);
         Obra obra = obraActivaProvider.get();
+        Granularidad granularidad = granularidadSeleccionada();
         tablaModelo.setRowCount(0);
         mostrarMensaje(" ", Theme.TEXT_SECONDARY);
-
+        labelResumen.setText(" ");
         if (obra == null) {
             tituloObra.setText("Selecciona una obra activa");
-            labelResumen.setText(" ");
             return;
         }
-        tituloObra.setText("Obra: " + obra.getNombre());
-
-        try {
-            List<ResumenPeriodo> periodos =
-                    movimientoService.resumenPorPeriodo(obra.getId(), granularidadSeleccionada());
-            double presupuesto = obra.getPresupuestoTotal();
-            double totalNeto = 0;
-            int totalMov = 0;
-
-            for (ResumenPeriodo p : periodos) {
-                double pctAcum = presupuesto > 0 ? (p.getAcumulado() / presupuesto) * 100 : 0;
-                tablaModelo.addRow(new Object[]{
-                        p.getEtiqueta(),
-                        p.getInicio().toString(),
-                        p.getFin().toString(),
-                        p.getNumMovimientos(),
-                        String.format("%,.2f", p.getEgresos()),
-                        String.format("%,.2f", p.getIngresos()),
-                        String.format("%,.2f", p.getNeto()),
-                        String.format("%,.2f", p.getAcumulado()),
-                        String.format("%.1f%%", pctAcum)
-                });
-                totalMov += p.getNumMovimientos();
-            }
-            if (!periodos.isEmpty()) {
-                totalNeto = periodos.get(periodos.size() - 1).getAcumulado();
+        tituloObra.setText("Obra: " + obra.getNombre() + " · Cargando...");
+        carga = new SwingWorker<>() {
+            @Override protected DatosComparativo doInBackground() throws Exception {
+                List<ResumenPeriodo> periodos = movimientoService.resumenPorPeriodo(obra.getId(), granularidad);
+                double presupuesto = obra.getPresupuestoTotal();
+                Object[][] filas = new Object[periodos.size()][];
+                int totalMov = 0;
+                for (int i = 0; i < periodos.size(); i++) {
+                    if (isCancelled()) return null;
+                    ResumenPeriodo p = periodos.get(i);
+                    double pctAcum = presupuesto > 0 ? p.getAcumulado() / presupuesto * 100 : 0;
+                    filas[i] = new Object[]{p.getEtiqueta(), p.getInicio().toString(), p.getFin().toString(),
+                            p.getNumMovimientos(), String.format("%,.2f", p.getEgresos()),
+                            String.format("%,.2f", p.getIngresos()), String.format("%,.2f", p.getNeto()),
+                            String.format("%,.2f", p.getAcumulado()), String.format("%.1f%%", pctAcum)};
+                    totalMov += p.getNumMovimientos();
+                }
+                double totalNeto = periodos.isEmpty() ? 0 : periodos.get(periodos.size() - 1).getAcumulado();
+                double pct = presupuesto > 0 ? totalNeto / presupuesto * 100 : 0;
+                String resumen = String.format("%d periodos · %d movimientos · Ejecutado S/. %,.2f de S/. %,.2f (%.1f%%)",
+                        periodos.size(), totalMov, totalNeto, presupuesto, pct);
+                return new DatosComparativo(filas, resumen, periodos.isEmpty());
             }
 
-            double pctGlobal = presupuesto > 0 ? (totalNeto / presupuesto) * 100 : 0;
-            labelResumen.setText(String.format(
-                    "%d periodos · %d movimientos · Ejecutado S/. %,.2f de S/. %,.2f (%.1f%%)",
-                    periodos.size(), totalMov, totalNeto, presupuesto, pctGlobal));
-
-            if (periodos.isEmpty()) {
-                mostrarMensaje("Aun no hay movimientos registrados para esta obra.", Theme.WARNING);
+            @Override protected void done() {
+                if (version != versionCarga || isCancelled()) return;
+                try {
+                    DatosComparativo datos = get();
+                    tablaModelo.setDataVector(datos.filas(), COLUMNAS);
+                    labelResumen.setText(datos.resumen());
+                    tituloObra.setText("Obra: " + obra.getNombre());
+                    if (datos.vacio()) mostrarMensaje("Aun no hay movimientos registrados para esta obra.", Theme.WARNING);
+                } catch (java.util.concurrent.CancellationException ignored) {
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (java.util.concurrent.ExecutionException e) {
+                    tituloObra.setText("Obra: " + obra.getNombre());
+                    mostrarMensaje("No se pudo cargar el comparativo: " + e.getCause().getMessage(), Theme.DANGER);
+                }
             }
-        } catch (SQLException e) {
-            mostrarMensaje("No se pudo cargar el comparativo: " + e.getMessage(), Theme.DANGER);
-        }
+        };
+        carga.execute();
     }
 
-    private void exportarExcel() {
-        Obra obra = obraActivaProvider.get();
-        if (obra == null) { mostrarMensaje("Selecciona una obra activa primero.", Theme.DANGER); return; }
-        try {
-            Path ruta = reporteExcel.exportarComparativoPeriodicoExcel(obra, granularidadSeleccionada());
-            mostrarMensaje("Excel generado: " + ruta.toAbsolutePath(), Theme.SUCCESS);
-            abrirArchivo(ruta.toFile());
-        } catch (Exception e) {
-            mostrarMensaje("No se pudo generar el Excel: " + e.getMessage(), Theme.DANGER);
-        }
-    }
+    private void exportarExcel() { exportar(false); }
+    private void exportarPdf() { exportar(true); }
 
-    private void exportarPdf() {
+    private void exportar(boolean pdf) {
+        if (exportando) return;
         Obra obra = obraActivaProvider.get();
         if (obra == null) { mostrarMensaje("Selecciona una obra activa primero.", Theme.DANGER); return; }
-        try {
-            Path ruta = reportePdf.exportarComparativoPeriodicoPdf(obra, granularidadSeleccionada());
-            mostrarMensaje("PDF generado: " + ruta.toAbsolutePath(), Theme.SUCCESS);
-            abrirArchivo(ruta.toFile());
-        } catch (Exception e) {
-            mostrarMensaje("No se pudo generar el PDF: " + e.getMessage(), Theme.DANGER);
-        }
+        Granularidad granularidad = granularidadSeleccionada();
+        exportando = true;
+        botonesExportar.forEach(b -> b.setEnabled(false));
+        mostrarMensaje("Generando reporte...", Theme.TEXT_SECONDARY);
+        new SwingWorker<Path, Void>() {
+            @Override protected Path doInBackground() throws Exception {
+                Path ruta = pdf ? reportePdf.exportarComparativoPeriodicoPdf(obra, granularidad)
+                        : reporteExcel.exportarComparativoPeriodicoExcel(obra, granularidad);
+                abrirArchivo(ruta.toFile());
+                return ruta;
+            }
+            @Override protected void done() {
+                try {
+                    mostrarMensaje((pdf ? "PDF" : "Excel") + " generado: " + get().toAbsolutePath(), Theme.SUCCESS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (java.util.concurrent.ExecutionException e) {
+                    mostrarMensaje("No se pudo generar el reporte: " + e.getCause().getMessage(), Theme.DANGER);
+                } finally {
+                    exportando = false;
+                    botonesExportar.forEach(b -> b.setEnabled(true));
+                }
+            }
+        }.execute();
     }
 
     private void abrirArchivo(File archivo) {

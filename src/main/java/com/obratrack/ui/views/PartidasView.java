@@ -259,12 +259,13 @@ public class PartidasView extends JPanel {
             protected DatosPartidas doInBackground() throws Exception {
                 List<Partida> partidas = partidaService.listarPorObra(obra.getId());
                 Map<Long, Double> ejecutadoPorPartida = movimientoService.totalEjecutadoPorPartida(obra.getId());
+                Map<String, Double> secciones = com.obratrack.service.PartidaCalculo.ejecutadoPorSeccion(partidas, ejecutadoPorPartida);
                 Object[][] filas = new Object[partidas.size()][];
                 for (int i = 0; i < partidas.size(); i++) {
                     if (isCancelled()) return null;
                     Partida p = partidas.get(i);
                     double ejecutado = p.isEsPadre()
-                            ? ejecutadoDeSeccion(p, partidas, ejecutadoPorPartida)
+                            ? secciones.getOrDefault(p.getCodigo() == null ? "" : p.getCodigo().trim(), 0.0)
                             : ejecutadoPorPartida.getOrDefault(p.getId(), 0.0);
                     double presupuestado = p.getCostoTotalPresupuestado();
                     double diferencia = presupuestado - ejecutado;
@@ -315,25 +316,6 @@ public class PartidasView extends JPanel {
 
     private String sangria(Partida p) {
         return "  ".repeat(Math.max(0, p.getNivel() - 1));
-    }
-
-    /**
-     * Ejecutado de una seccion (partida agrupadora): suma del ejecutado de todas las
-     * partidas hoja cuyo codigo cuelga de la del padre (prefijo "codigoPadre.").
-     */
-    private double ejecutadoDeSeccion(Partida padre, List<Partida> partidas, Map<Long, Double> ejecutadoPorPartida) {
-        String codigoPadre = padre.getCodigo();
-        if (codigoPadre == null || codigoPadre.isBlank()) return 0.0;
-        String prefijo = codigoPadre.trim() + ".";
-        double suma = 0;
-        for (Partida hija : partidas) {
-            if (hija.isEsPadre()) continue;
-            String cod = hija.getCodigo();
-            if (cod != null && cod.trim().startsWith(prefijo)) {
-                suma += ejecutadoPorPartida.getOrDefault(hija.getId(), 0.0);
-            }
-        }
-        return suma;
     }
 
     private boolean esSeparador(int modelRow) {
