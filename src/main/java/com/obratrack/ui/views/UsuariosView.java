@@ -17,6 +17,7 @@ import java.util.List;
 /** Gestion de usuarios (solo ADMIN): crear, editar, activar/desactivar y resetear contrasena. */
 public class UsuariosView extends JPanel {
 
+    private final com.obratrack.ui.CargaVista carga = new com.obratrack.ui.CargaVista(this);
     private final IUsuarioService usuarioService = ServiceFactory.usuario();
 
     private final JTextField campoUsername = new JTextField();
@@ -260,10 +261,13 @@ public class UsuariosView extends JPanel {
     }
 
     public void refrescar() {
-        try {
-            usuariosActuales.clear();
-            tablaModelo.setRowCount(0);
-            for (Usuario u : usuarioService.listar()) {
+        carga.cancelar();
+        usuariosActuales.clear();
+        tablaModelo.setRowCount(0);
+        carga.ejecutar(() -> usuarioService.listar(), usuarios -> {
+
+
+            for (Usuario u : usuarios) {
                 usuariosActuales.add(u);
                 tablaModelo.addRow(new Object[]{
                         u.getUsername(),
@@ -272,9 +276,9 @@ public class UsuariosView extends JPanel {
                         u.isActivo() ? "Si" : "No"
                 });
             }
-        } catch (SQLException e) {
+        }, e -> {
             mostrar("No se pudieron cargar los usuarios: " + e.getMessage(), Theme.DANGER);
-        }
+        });
     }
 
     private void mostrar(String texto, Color color) {

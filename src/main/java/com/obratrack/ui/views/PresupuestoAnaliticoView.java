@@ -34,6 +34,7 @@ public class PresupuestoAnaliticoView extends JPanel {
     private final IObraService obraService = ServiceFactory.obra();
     private final IPartidaService partidaService = ServiceFactory.partida();
     private final IAdicionalDeductivoService adicionalService = ServiceFactory.adicionalDeductivo();
+    private final com.obratrack.ui.CargaVista carga = new com.obratrack.ui.CargaVista(this);
     private final Supplier<Obra> obraActivaProvider;
 
     private final JLabel tituloObra = new JLabel();
@@ -155,7 +156,10 @@ public class PresupuestoAnaliticoView extends JPanel {
     //  Carga y refresco
     // ============================================================
 
+    private record DatosPresupuesto(List<AdicionalDeductivo> items, double costoDirecto) {}
+
     public void refrescar() {
+        carga.cancelar();
         Obra obra = obraActivaProvider.get();
         tablaModelo.setRowCount(0);
         itemsActuales.clear();
@@ -168,13 +172,17 @@ public class PresupuestoAnaliticoView extends JPanel {
         }
         tituloObra.setText("Obra: " + obra.getNombre());
 
-        try {
+        carga.ejecutar(() -> {
             List<Partida> partidas = partidaService.listarPorObra(obra.getId());
             double costoDirecto = partidas.stream()
                     .filter(p -> !p.isEsPadre())
                     .mapToDouble(Partida::getCostoTotalPresupuestado)
                     .sum();
             List<AdicionalDeductivo> items = adicionalService.listarPorObra(obra.getId());
+            return new DatosPresupuesto(items, costoDirecto);
+        }, datos -> {
+            List<AdicionalDeductivo> items = datos.items();
+            double costoDirecto = datos.costoDirecto();
             itemsActuales.addAll(items);
 
             for (AdicionalDeductivo ad : items) {
@@ -189,10 +197,10 @@ public class PresupuestoAnaliticoView extends JPanel {
             PresupuestoAnaliticoCalculo.Resultado r = PresupuestoAnaliticoCalculo.calcular(
                     costoDirecto, obra.getPctGastosGenerales(), obra.getPctUtilidad(), obra.getPctIgv(), items);
             actualizarResumen(r);
-        } catch (SQLException e) {
+                }, e -> {
             JOptionPane.showMessageDialog(this, "No se pudo cargar el presupuesto analitico: " + e.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
-        }
+                });
     }
 
     private void actualizarResumen(PresupuestoAnaliticoCalculo.Resultado r) {

@@ -32,11 +32,19 @@ import java.util.function.Supplier;
  */
 public class DocumentosView extends JPanel {
 
+    private final IDocumentoService documentoService;
+    private final IPartidaService partidaService;
     private final Supplier<Obra> obraActivaProvider;
     private final JLabel tituloObra = new JLabel();
     private final JTabbedPane tabs = new JTabbedPane();
 
     public DocumentosView(Supplier<Obra> obraActivaProvider) {
+        this(obraActivaProvider, ServiceFactory.documento(), ServiceFactory.partida());
+    }
+
+    DocumentosView(Supplier<Obra> obraActivaProvider, IDocumentoService documentos, IPartidaService partidas) {
+        this.documentoService = documentos;
+        this.partidaService = partidas;
         this.obraActivaProvider = obraActivaProvider;
         setLayout(new BorderLayout(0, 14));
         setBackground(Theme.BG_PRIMARY);
@@ -58,6 +66,7 @@ public class DocumentosView extends JPanel {
         tabs.addTab("Estudios de Ingenieria", new CategoriaPanel(Documento.Categoria.ESTUDIO, false));
         tabs.addTab("Panel Fotografico", new CategoriaPanel(Documento.Categoria.FOTO, false));
         tabs.addTab("Anexos", new CategoriaPanel(Documento.Categoria.ANEXO, false));
+        tabs.addChangeListener(e -> cargarPestanaActual());
         add(tabs, BorderLayout.CENTER);
     }
 
@@ -65,8 +74,13 @@ public class DocumentosView extends JPanel {
         Obra obra = obraActivaProvider.get();
         tituloObra.setText(obra != null ? "Obra: " + obra.getNombre() : "Selecciona una obra activa");
         for (Component c : tabs.getComponents()) {
-            if (c instanceof CategoriaPanel p) p.cargar();
+            if (c instanceof CategoriaPanel p) p.cancelarCarga();
         }
+        cargarPestanaActual();
+    }
+
+    private void cargarPestanaActual() {
+        if (tabs.getSelectedComponent() instanceof CategoriaPanel p) p.cargar();
     }
 
     // ============================================================
@@ -74,10 +88,9 @@ public class DocumentosView extends JPanel {
     // ============================================================
 
     private class CategoriaPanel extends JPanel {
+        private final com.obratrack.ui.CargaVista carga = new com.obratrack.ui.CargaVista(this);
         private final Documento.Categoria categoria;
         private final boolean requierePartida;
-        private final IDocumentoService documentoService = ServiceFactory.documento();
-        private final IPartidaService partidaService = ServiceFactory.partida();
 
         private final DefaultTableModel modelo;
         private final JTable tabla;
@@ -129,40 +142,47 @@ public class DocumentosView extends JPanel {
             add(new JScrollPane(tabla), BorderLayout.CENTER);
         }
 
-        void cargar() {
+        private record DatosDocumentos(List<Documento> documentos, java.util.Map<Long, String> codigos) {}
+
+        void cancelarCarga() {
+            carga.cancelar();
             modelo.setRowCount(0);
             actuales.clear();
-            Obra obra = obraActivaProvider.get();
-            if (obra == null) return;
-            try {
-                List<Documento> documentos = documentoService.listarPorObra(obra.getId(), categoria);
-                actuales.addAll(documentos);
-                for (Documento d : documentos) {
-                    modelo.addRow(new Object[]{
-                            d.getNombre(),
-                            categoria == Documento.Categoria.PLANO ? d.getVersionFormateada() : "",
-                            d.getPartidaId() != null ? nombrePartida(d.getPartidaId()) : "",
-                            d.getFecha() != null ? d.getFecha().format(fmt) : "",
-                            d.getNombreArchivoOriginal(),
-                            DocumentoCalculo.formatoTamano(d.getTamanoBytes()),
-                            d.getUsuarioRegistro() != null ? d.getUsuarioRegistro() : ""
-                    });
-                }
-            } catch (SQLException e) {
-                mostrarError("No se pudieron cargar los documentos: " + e.getMessage());
-            }
         }
 
-        private String nombrePartida(long partidaId) {
-            try {
-                for (Partida p : partidaService.listarPorObra(obraActivaProvider.get().getId())) {
-                    if (p.getId() != null && p.getId() == partidaId) return p.getCodigo();
+        void cargar() {
+            cancelarCarga();
+            Obra obra = obraActivaProvider.get();
+            if (obra == null) return;
+            carga.ejecutar(() -> {
+                List<Documento> documentos = documentoService.listarPorObra(obra.getId(), categoria);
+                java.util.Map<Long, String> codigos = new java.util.HashMap<>();
+                if (documentos.stream().anyMatch(d -> d.getPartidaId() != null)) {
+                    try {
+                        for (Partida partida : partidaService.listarPorObra(obra.getId())) {
+                            codigos.put(partida.getId(), partida.getCodigo());
+                        }
+                    } catch (SQLException ignored) {
+                        // Los documentos siguen visibles si no se puede resolver su partida.
+                    }
                 }
-            } catch (SQLException ignored) {
-                // si no se puede resolver el nombre, se deja en blanco; no bloquea la tabla
-            }
-            return "";
+                return new DatosDocumentos(documentos, codigos);
+            }, datos -> {
+                actuales.addAll(datos.documentos());
+                Object[][] filas = new Object[datos.documentos().size()][];
+                for (int i = 0; i < datos.documentos().size(); i++) {
+                    Documento d = datos.documentos().get(i);
+                    filas[i] = new Object[]{d.getNombre(),
+                            categoria == Documento.Categoria.PLANO ? d.getVersionFormateada() : "",
+                            datos.codigos().getOrDefault(d.getPartidaId(), ""),
+                            d.getFecha() != null ? d.getFecha().format(fmt) : "",
+                            d.getNombreArchivoOriginal(), DocumentoCalculo.formatoTamano(d.getTamanoBytes()),
+                            d.getUsuarioRegistro() != null ? d.getUsuarioRegistro() : ""};
+                }
+                modelo.setDataVector(filas, COLS);
+            }, e -> mostrarError("No se pudieron cargar los documentos: " + e.getMessage()));
         }
+
 
         private Documento seleccionado() {
             int fila = tabla.getSelectedRow();

@@ -26,6 +26,7 @@ import java.util.function.Supplier;
 public class CuadernoView extends JPanel {
 
     private final ICuadernoService cuadernoService = ServiceFactory.cuaderno();
+    private final com.obratrack.ui.CargaVista carga = new com.obratrack.ui.CargaVista(this);
     private final Supplier<Obra> obraActivaProvider;
 
     private final JLabel tituloObra = new JLabel();
@@ -95,6 +96,7 @@ public class CuadernoView extends JPanel {
     // ============================================================
 
     public void refrescar() {
+        carga.cancelar();
         Obra obra = obraActivaProvider.get();
         feed.removeAll();
 
@@ -106,8 +108,8 @@ public class CuadernoView extends JPanel {
         }
         tituloObra.setText("Obra: " + obra.getNombre());
 
-        try {
-            List<AsientoCuaderno> asientos = cuadernoService.listarPorObra(obra.getId());
+        carga.ejecutar(() -> cuadernoService.listarPorObra(obra.getId()), asientos -> {
+
             LocalDate hoy = LocalDate.now();
 
             if (asientos.isEmpty()) {
@@ -129,10 +131,10 @@ public class CuadernoView extends JPanel {
                 }
             }
             repintar();
-        } catch (SQLException e) {
+        }, e -> {
             JOptionPane.showMessageDialog(this, "No se pudo cargar el cuaderno de obra: " + e.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
-        }
+        });
     }
 
     private void repintar() {

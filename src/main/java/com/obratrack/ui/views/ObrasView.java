@@ -26,6 +26,7 @@ import java.util.function.Consumer;
 /** Vista de gestion de obras: crear nueva obra y cargar su Excel de presupuesto. */
 public final class ObrasView extends JPanel {
 
+    private final com.obratrack.ui.CargaVista carga = new com.obratrack.ui.CargaVista(this);
     private final IObraService obraService = ServiceFactory.obra();
     private final IPartidaService partidaService = ServiceFactory.partida();
     private final ExcelImporter excelImporter = new ExcelImporter();
@@ -374,10 +375,12 @@ public final class ObrasView extends JPanel {
     }
 
     private void cargarListado() {
-        try {
-            tablaModelo.setRowCount(0);
-            obrasActuales.clear();
-            List<Obra> obras = obraService.listarTodas();
+        carga.cancelar();
+        tablaModelo.setRowCount(0);
+        obrasActuales.clear();
+        carga.ejecutar(() -> obraService.listarTodas(), obras -> {
+
+
             for (Obra o : obras) {
                 obrasActuales.add(o);
                 tablaModelo.addRow(new Object[]{
@@ -386,9 +389,9 @@ public final class ObrasView extends JPanel {
                         o.getFechaCreacion()
                 });
             }
-        } catch (SQLException e) {
+        }, e -> {
             mostrarError("No se pudo cargar el listado de obras: " + e.getMessage());
-        }
+        });
     }
 
     private Obra obraSeleccionada() {

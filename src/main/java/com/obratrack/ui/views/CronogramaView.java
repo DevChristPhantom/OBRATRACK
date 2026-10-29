@@ -31,6 +31,7 @@ public class CronogramaView extends JPanel {
 
     private final ICronogramaService cronogramaService = ServiceFactory.cronograma();
     private final IPartidaService partidaService = ServiceFactory.partida();
+    private final com.obratrack.ui.CargaVista carga = new com.obratrack.ui.CargaVista(this);
     private final Supplier<Obra> obraActivaProvider;
 
     private final JLabel tituloObra = new JLabel();
@@ -148,6 +149,7 @@ public class CronogramaView extends JPanel {
     // ============================================================
 
     public void refrescar() {
+        carga.cancelar();
         Obra obra = obraActivaProvider.get();
         tablaModelo.setRowCount(0);
         actividadesActuales.clear();
@@ -162,8 +164,8 @@ public class CronogramaView extends JPanel {
         }
         tituloObra.setText("Obra: " + obra.getNombre());
 
-        try {
-            List<Actividad> actividades = cronogramaService.listarPorObra(obra.getId());
+        carga.ejecutar(() -> cronogramaService.listarPorObra(obra.getId()), actividades -> {
+
             actividadesActuales.addAll(actividades);
             LocalDate hoy = LocalDate.now();
 
@@ -186,10 +188,10 @@ public class CronogramaView extends JPanel {
             gantt.setDatos(actividades, hoy);
             curva.setDatos(construirCurva(actividades, obra, hoy), hoy);
             repintarGraficos();
-        } catch (SQLException e) {
+        }, e -> {
             JOptionPane.showMessageDialog(this, "No se pudo cargar el cronograma: " + e.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
-        }
+        });
     }
 
     private List<CronogramaCalculo.PuntoCurva> construirCurva(List<Actividad> actividades, Obra obra, LocalDate hoy) {
