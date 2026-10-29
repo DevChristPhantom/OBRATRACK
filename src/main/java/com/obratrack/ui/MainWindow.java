@@ -68,6 +68,8 @@ public final class MainWindow extends JFrame {
     private final JLabel statusObra = new JLabel();
 
     private Obra obraActiva;
+    private SwingWorker<List<Obra>, Void> cargaObras;
+    private int versionObras;
     private boolean listo = false; // evita refrescos durante la construccion inicial
 
     public MainWindow() {
@@ -556,36 +558,59 @@ public final class MainWindow extends JFrame {
     }
 
     private void onObraCreada(Obra nuevaObra) {
-        cargarObrasEnCombo();
-        comboObraActiva.setSelectedItem(nuevaObra);
-        mostrarVista("partidas");
+        cargarObrasEnCombo(nuevaObra, () -> mostrarVista("partidas"));
     }
 
     /** Tras editar o eliminar una obra: recarga el selector superior y refresca la vista. */
     private void onObrasModificadas() {
         cargarObrasEnCombo();
-        refrescarVistaActual();
     }
 
     public void cargarObrasEnCombo() {
-        try {
-            List<Obra> activas = obraService.listarActivas();
-            Obra seleccionPrevia = obraActiva;
-            comboObraActiva.removeAllItems();
-            for (Obra o : activas) {
-                comboObraActiva.addItem(o);
+        cargarObrasEnCombo(obraActiva, null);
+    }
+
+    private void cargarObrasEnCombo(Obra preferida, Runnable alCargar) {
+        int version = ++versionObras;
+        if (cargaObras != null) cargaObras.cancel(true);
+        comboObraActiva.setEnabled(false);
+        cargaObras = new SwingWorker<>() {
+            @Override protected List<Obra> doInBackground() throws Exception {
+                return obraService.listarActivas();
             }
-            if (seleccionPrevia != null && activas.contains(seleccionPrevia)) {
-                comboObraActiva.setSelectedItem(seleccionPrevia);
-            } else if (!activas.isEmpty()) {
-                comboObraActiva.setSelectedIndex(0);
-            } else {
-                obraActiva = null;
+
+            @Override protected void done() {
+                if (version != versionObras || isCancelled()) return;
+                try {
+                    List<Obra> activas = get();
+                    boolean listoPrevio = listo;
+                    listo = false;
+                    try {
+                        // Un modelo completo evita un refresco por cada obra agregada.
+                        comboObraActiva.setModel(new DefaultComboBoxModel<>(activas.toArray(Obra[]::new)));
+                        if (preferida != null) {
+                            activas.stream().filter(o -> java.util.Objects.equals(o.getId(), preferida.getId()))
+                                    .findFirst().ifPresent(comboObraActiva::setSelectedItem);
+                        }
+                        onObraActivaCambiada();
+                    } finally {
+                        listo = listoPrevio;
+                    }
+                    if (alCargar != null) alCargar.run();
+                    else if (listo) refrescarVistaActual();
+                } catch (java.util.concurrent.CancellationException ignored) {
+                    // Una recarga mas reciente reemplazo esta solicitud.
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (java.util.concurrent.ExecutionException e) {
+                    JOptionPane.showMessageDialog(MainWindow.this,
+                            "No se pudieron cargar las obras: " + e.getCause().getMessage(),
+                            "Error de base de datos", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    comboObraActiva.setEnabled(true);
+                }
             }
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this,
-                    "No se pudieron cargar las obras: " + e.getMessage(),
-                    "Error de base de datos", JOptionPane.ERROR_MESSAGE);
-        }
+        };
+        cargaObras.execute();
     }
 }
