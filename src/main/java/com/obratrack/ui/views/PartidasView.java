@@ -96,6 +96,7 @@ public class PartidasView extends JPanel {
         };
         tabla.setFont(Theme.FONT_BASE);
         tabla.setRowHeight(28);
+        Theme.estilizarTabla(tabla);
         tabla.getTableHeader().setFont(Theme.FONT_BOLD);
         tabla.setDefaultRenderer(Object.class, new FilaColorRenderer());
         tabla.setAutoCreateRowSorter(true);
