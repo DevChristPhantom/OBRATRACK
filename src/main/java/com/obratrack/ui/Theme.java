@@ -28,6 +28,28 @@ public final class Theme {
     public static final Font FONT_TITLE = new Font("Segoe UI", Font.BOLD, 20);
     public static final Font FONT_KPI = new Font("Segoe UI", Font.BOLD, 26);
 
+    /** Acabado de las tarjetas, sin cambiar la paleta ni su distribucion. */
+    public static void pintarTarjeta(java.awt.Graphics g, javax.swing.JComponent c, Color fondo) {
+        java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+        g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setColor(fondo);
+        g2.fillRoundRect(0, 0, c.getWidth() - 1, c.getHeight() - 1, 12, 12);
+        g2.setColor(BORDER);
+        g2.drawRoundRect(0, 0, c.getWidth() - 1, c.getHeight() - 1, 12, 12);
+        g2.dispose();
+    }
+
+    public static void estilizarTabla(javax.swing.JTable tabla) {
+        tabla.setShowVerticalLines(false);
+        tabla.setGridColor(BORDER);
+        tabla.setIntercellSpacing(new java.awt.Dimension(0, 1));
+        tabla.setSelectionBackground(NAV_ACTIVE);
+        tabla.setSelectionForeground(TEXT_PRIMARY);
+        tabla.getTableHeader().setBackground(BG_CARD);
+        tabla.getTableHeader().setForeground(TEXT_PRIMARY);
+    }
+
     private Theme() {}
 
     /** Color de estado segun % de presupuesto consumido (verde/amarillo/rojo). */

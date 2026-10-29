@@ -178,7 +178,13 @@ public class DashboardView extends JPanel {
     }
 
     private JPanel tarjetaChart(String titulo, JComponent chart) {
-        JPanel card = new JPanel(new BorderLayout(0, 8));
+        JPanel card = new JPanel(new BorderLayout(0, 8)) {
+            @Override protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Theme.pintarTarjeta(g, this, Theme.BG_SECONDARY);
+            }
+        };
+        card.setOpaque(false);
         card.setBackground(Theme.BG_SECONDARY);
         card.setBorder(new EmptyBorder(14, 16, 14, 16));
         JLabel lbl = new JLabel(titulo);
@@ -526,6 +532,7 @@ public class DashboardView extends JPanel {
         KpiCard(String titulo, String iconName, Color accent) {
             setLayout(new BorderLayout(14, 0));
             setBackground(Theme.BG_CARD);
+            setOpaque(false);
             setBorder(new EmptyBorder(16, 16, 16, 16));
 
             add(new IconBadge(Icons.get(iconName, 24, accent), accent), BorderLayout.WEST);
@@ -547,6 +554,11 @@ public class DashboardView extends JPanel {
             textos.add(Box.createVerticalStrut(6));
             textos.add(valorLabel);
             add(textos, BorderLayout.CENTER);
+        }
+
+        @Override protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Theme.pintarTarjeta(g, this, Theme.BG_CARD);
         }
 
         /** Ajusta el tamano de fuente segun la longitud para que el monto no se corte. */
@@ -649,14 +661,15 @@ public class DashboardView extends JPanel {
                 g2.setColor(gr.color);
                 g2.fillRoundRect(lx, ly - 10, 12, 12, 3, 3);
                 g2.setColor(Theme.TEXT_PRIMARY);
-                String nombre = ajustar(fm, gr.nombre, anchoLeyenda - 130);
+                String nombre = ajustar(fm, gr.nombre, anchoLeyenda - 24);
                 g2.drawString(nombre, lx + 20, ly);
                 String cifra = String.format("S/. %,.0f (%.1f%%)", gr.presupuesto, pct);
                 g2.setColor(Theme.TEXT_SECONDARY);
-                int xCifra = lx + anchoLeyenda - fm.stringWidth(cifra);
-                g2.drawString(cifra, Math.max(lx + 20, xCifra), ly);
-                ly += 26;
-                if (ly > cy + size + 10) break;
+                g2.setFont(Theme.FONT_SMALL);
+                g2.drawString(ajustar(g2.getFontMetrics(), cifra, anchoLeyenda - 24), lx + 20, ly + 16);
+                g2.setFont(Theme.FONT_BASE);
+                ly += 44;
+                if (ly + 16 > h) break;
             }
 
             g2.dispose();

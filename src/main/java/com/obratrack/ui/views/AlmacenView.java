@@ -26,8 +26,8 @@ import java.util.function.Supplier;
 /** Pantalla mas usada en campo: registrar, editar y eliminar ingreso/egreso de material contra una partida. */
 public class AlmacenView extends JPanel {
 
-    private final IPartidaService partidaService = ServiceFactory.partida();
-    private final IMovimientoService movimientoService = ServiceFactory.movimiento();
+    private final IPartidaService partidaService;
+    private final IMovimientoService movimientoService;
     private final Supplier<Obra> obraActivaProvider;
     private final Runnable alRegistrar;
 
@@ -47,12 +47,22 @@ public class AlmacenView extends JPanel {
     private JTable tabla;
     private final DefaultTableModel tablaModelo;
     private final List<MovimientoAlmacen> movimientosActuales = new ArrayList<>();
+    private SwingWorker<DatosAlmacen, Void> carga;
+    private int versionCarga;
+    private boolean cargando;
     private Long editandoId = null;
     private Long comboObraId = null; // obra cuyas partidas ya estan cargadas en el combo
 
     private static final String[] COLUMNAS = {"Fecha", "Partida", "Tipo", "Cantidad", "Costo Unit.", "Total (S/.)", "Observacion"};
 
     public AlmacenView(Supplier<Obra> obraActivaProvider, Runnable alRegistrar) {
+        this(obraActivaProvider, alRegistrar, ServiceFactory.partida(), ServiceFactory.movimiento());
+    }
+
+    AlmacenView(Supplier<Obra> obraActivaProvider, Runnable alRegistrar,
+                IPartidaService partidas, IMovimientoService movimientos) {
+        this.partidaService = partidas;
+        this.movimientoService = movimientos;
         this.obraActivaProvider = obraActivaProvider;
         this.alRegistrar = alRegistrar;
 
@@ -81,6 +91,7 @@ public class AlmacenView extends JPanel {
         tabla = new JTable(tablaModelo);
         tabla.setFont(Theme.FONT_BASE);
         tabla.setRowHeight(26);
+        Theme.estilizarTabla(tabla);
         tabla.getTableHeader().setFont(Theme.FONT_BOLD);
         tabla.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
@@ -252,6 +263,10 @@ public class AlmacenView extends JPanel {
 
     /** Registra un movimiento nuevo o guarda los cambios si estamos editando. */
     private void guardar() {
+        if (cargando) {
+            mostrarMensaje("Espera a que terminen de cargar los datos.", Theme.TEXT_SECONDARY);
+            return;
+        }
         Obra obra = obraActivaProvider.get();
         if (obra == null) {
             mostrarMensaje("Selecciona una obra activa primero.", Theme.DANGER);
@@ -445,48 +460,79 @@ public class AlmacenView extends JPanel {
         dialog.setVisible(true);
     }
 
+    private record DatosAlmacen(List<Partida> partidas, List<MovimientoAlmacen> movimientos, Object[][] filas) {}
+
     public void refrescar() {
+        int version = ++versionCarga;
+        if (carga != null) carga.cancel(true);
         Obra obra = obraActivaProvider.get();
         tablaModelo.setRowCount(0);
         movimientosActuales.clear();
         salirModoEdicion();
-
+        btnGuardar.setEnabled(false);
         if (obra == null) {
+            cargando = false;
+            comboPartida.setEnabled(true);
             tituloObra.setText("Selecciona una obra activa");
             comboPartida.removeAllItems();
             comboObraId = null;
             return;
         }
-        tituloObra.setText("Obra: " + obra.getNombre());
-
-        try {
-            // El combo de partidas solo se reconstruye si cambio la obra (son cientos de items).
-            if (!java.util.Objects.equals(comboObraId, obra.getId())) {
-                comboPartida.removeAllItems();
-                List<Partida> partidas = partidaService.listarEjecutablesPorObra(obra.getId());
-                for (Partida p : partidas) comboPartida.addItem(p);
-                comboObraId = obra.getId();
-                mostrarMensaje(partidas.isEmpty()
-                        ? "Esta obra no tiene partidas importadas todavia. Ve a 'Obras' y carga su Excel de presupuesto."
-                        : " ", partidas.isEmpty() ? Theme.WARNING : Theme.TEXT_SECONDARY);
-            }
-
-            List<MovimientoAlmacen> movimientos = movimientoService.listarPorObra(obra.getId());
-            for (MovimientoAlmacen m : movimientos) {
-                movimientosActuales.add(m);
-                tablaModelo.addRow(new Object[]{
-                        m.getFecha(),
-                        m.getPartidaCodigo() + " - " + m.getPartidaDescripcion(),
-                        m.getTipo(),
-                        m.getCantidad(),
-                        String.format("%,.2f", m.getCostoUnitarioReal()),
-                        String.format("%,.2f", m.getCostoTotalReal()),
-                        m.getObservacion()
-                });
-            }
-        } catch (SQLException e) {
-            mostrarMensaje("No se pudieron cargar los datos: " + e.getMessage(), Theme.DANGER);
+        cargando = true;
+        boolean cargarPartidas = !java.util.Objects.equals(comboObraId, obra.getId());
+        if (cargarPartidas) {
+            comboPartida.removeAllItems();
+            comboObraId = null;
         }
+        comboPartida.setEnabled(false);
+        tituloObra.setText("Obra: " + obra.getNombre() + " · Cargando...");
+        carga = new SwingWorker<>() {
+            @Override protected DatosAlmacen doInBackground() throws Exception {
+                List<Partida> partidas = cargarPartidas
+                        ? partidaService.listarEjecutablesPorObra(obra.getId()) : null;
+                List<MovimientoAlmacen> movimientos = movimientoService.listarPorObra(obra.getId());
+                Object[][] filas = new Object[movimientos.size()][];
+                for (int i = 0; i < movimientos.size(); i++) {
+                    if (isCancelled()) return null;
+                    MovimientoAlmacen m = movimientos.get(i);
+                    filas[i] = new Object[]{m.getFecha(),
+                            m.getPartidaCodigo() + " - " + m.getPartidaDescripcion(),
+                            m.getTipo(), m.getCantidad(),
+                            String.format("%,.2f", m.getCostoUnitarioReal()),
+                            String.format("%,.2f", m.getCostoTotalReal()), m.getObservacion()};
+                }
+                return new DatosAlmacen(partidas, movimientos, filas);
+            }
+
+            @Override protected void done() {
+                if (version != versionCarga || isCancelled()) return;
+                try {
+                    DatosAlmacen datos = get();
+                    if (datos.partidas() != null) {
+                        comboPartida.setModel(new DefaultComboBoxModel<>(datos.partidas().toArray(Partida[]::new)));
+                        comboObraId = obra.getId();
+                        mostrarMensaje(datos.partidas().isEmpty()
+                                ? "Esta obra no tiene partidas importadas todavia. Ve a 'Obras' y carga su Excel de presupuesto."
+                                : " ", datos.partidas().isEmpty() ? Theme.WARNING : Theme.TEXT_SECONDARY);
+                    }
+                    movimientosActuales.addAll(datos.movimientos());
+                    tablaModelo.setDataVector(datos.filas(), COLUMNAS);
+                    tituloObra.setText("Obra: " + obra.getNombre());
+                    btnGuardar.setEnabled(Permisos.puedeEscribir() && comboPartida.getItemCount() > 0);
+                } catch (java.util.concurrent.CancellationException ignored) {
+                    // Una obra seleccionada mas recientemente reemplazo esta carga.
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (java.util.concurrent.ExecutionException e) {
+                    tituloObra.setText("Obra: " + obra.getNombre());
+                    mostrarMensaje("No se pudieron cargar los datos: " + e.getCause().getMessage(), Theme.DANGER);
+                } finally {
+                    cargando = false;
+                    comboPartida.setEnabled(true);
+                }
+            }
+        };
+        carga.execute();
     }
 
     private void limpiarFormulario() {
